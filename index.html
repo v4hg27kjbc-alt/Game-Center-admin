@@ -928,6 +928,48 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
 .live-empty { text-align: center; color: rgba(190,220,255,.45); font-size: 12.5px; padding: 16px 0; }
 .live-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .live-head .live-sub { font-size: 12px; color: var(--text-dim); }
+.live-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ===== 快讯刷新按钮：蓝紫渐变 + 扫光（与主站按钮同风格） ===== */
+.glow-btn {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  border-radius: 50px;
+  border: 1px solid var(--ai-border);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.28), rgba(139, 92, 246, 0.28));
+  color: #e8eaf6;
+  font-size: 12px;
+  font-family: inherit;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+.glow-btn::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+  animation: btnSweep 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes btnSweep {
+  0% { left: -100%; }
+  45% { left: 100%; }
+  100% { left: 100%; }
+}
+.glow-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.48), rgba(139, 92, 246, 0.48));
+  border-color: rgba(99, 102, 241, 0.65);
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.35);
+}
+.glow-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* ===== 推荐机型审核列表 ===== */
 .rec-list { display: flex; flex-direction: column; gap: 12px; }
@@ -1040,7 +1082,10 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
           <div class="chart-card">
             <div class="live-head">
               <h3>今日航空快讯</h3>
-              <span class="live-sub" id="liveNewsTime">未同步</span>
+              <div class="live-head-actions">
+                <span class="live-sub" id="liveNewsTime">未同步</span>
+                <button id="newsRefreshBtn" class="glow-btn" type="button">立即刷新快讯</button>
+              </div>
             </div>
             <div id="liveNewsList" class="live-list"></div>
           </div>
@@ -1764,6 +1809,27 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     if (st === 'rejected') return '已驳回';
     return '待审核';
   }
+  function recPad2(n) { return (n < 10 ? '0' : '') + n; }
+  /** 时间统一格式化为「YYYY-MM-DD HH:mm」；字段缺失或非法时返回「—」 */
+  function recFmtTime(t) {
+    if (t === null || t === undefined) return '—';
+    var d = null;
+    if (typeof t === 'number' && isFinite(t)) {
+      d = new Date(t < 1e12 ? t * 1000 : t);
+    } else {
+      var s = String(t).trim();
+      if (!s) return '—';
+      if (/^\d+$/.test(s)) {
+        var n = parseInt(s, 10);
+        d = new Date(s.length <= 10 ? n * 1000 : n);
+      } else {
+        d = new Date(s.replace(' ', 'T'));
+      }
+    }
+    if (!d || isNaN(d.getTime())) return '—';
+    return d.getFullYear() + '-' + recPad2(d.getMonth() + 1) + '-' + recPad2(d.getDate())
+      + ' ' + recPad2(d.getHours()) + ':' + recPad2(d.getMinutes());
+  }
   function recImgUrl(img) {
     if (!img) return '';
     var s = String(img);
@@ -1874,10 +1940,10 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
         + '<div class="rec-main">'
         + '<div class="rec-name">' + esc(r.nameZh || '（无名）') + '</div>'
         + '<div class="rec-meta">型号：' + esc(r.code || '—') + ' · 分类：' + esc(r.category || '—') + ' · 国家/地区：' + esc(r.country || '—') + '</div>'
-        + '<div class="rec-meta">提交人匿名ID：<span class="rec-uid">' + esc(r.uid || '—') + '</span> · 提交时间：' + esc(r.submittedAt || '—') + '</div>'
+        + '<div class="rec-meta">提交人匿名ID：<span class="rec-uid">' + esc(r.uid || '—') + '</span> · 提交时间：' + esc(recFmtTime(r.submittedAt)) + ' · 审核时间：' + esc(recFmtTime(r.reviewedAt)) + '</div>'
         + (r.descZh ? '<div class="rec-desc">' + esc(r.descZh) + '</div>' : '')
         + (specs ? '<div class="rec-desc">规格：' + esc(specs) + '</div>' : '')
-        + (r.reply ? '<div class="rec-reply">管理员反馈：' + esc(r.reply) + '</div>' : '')
+        + '<div class="rec-reply">管理员反馈：' + esc(r.reply ? r.reply : '—') + '</div>'
         + '</div>'
         + '<div class="rec-side">'
         + '<span class="rec-status ' + stt + '">' + recStatusText(stt) + '</span>'
@@ -1885,7 +1951,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
         + '<button class="btn btn-primary btn-sm" data-rec-act="approved" data-id="' + esc(r.id) + '">采纳</button>'
         + '<button class="btn btn-danger btn-sm" data-rec-act="rejected" data-id="' + esc(r.id) + '">驳回</button>'
         + '</div>'
-        + (r.reviewedAt ? '<span class="live-sub">审核于 ' + esc(r.reviewedAt) + '</span>' : '')
+        + '<span class="live-sub">审核时间 ' + esc(recFmtTime(r.reviewedAt)) + '</span>'
         + '</div></div>';
     }
     list.innerHTML = html;
@@ -1941,18 +2007,50 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     });
   }
   function loadNews(force) {
-    if (NEWS_STATE.loaded && !force) return;
-    if (isGuest()) return;
-    recRequest('/api/news').then(function (data) {
+    if (NEWS_STATE.loaded && !force) return Promise.resolve(false);
+    if (isGuest()) return Promise.resolve(false);
+    return recRequest('/api/news').then(function (data) {
       NEWS_STATE.items = recExtractList(data, ['items', 'data', 'list', 'news']);
       NEWS_STATE.updatedAt = (data && (data.updatedAt || data.date)) ? (data.updatedAt || data.date) : '';
       NEWS_STATE.error = '';
       NEWS_STATE.loaded = true;
       renderLiveNews();
+      return true;
     }).catch(function (err) {
       NEWS_STATE.error = (err && err.message) ? err.message : '未知错误';
       NEWS_STATE.loaded = true;
       renderLiveNews();
+      return false;
+    });
+  }
+  /** 立即刷新快讯：POST /api/news-refresh（带 X-Admin-Token）→ 成功后重拉 /api/news */
+  function refreshNewsNow() {
+    var btn = $('newsRefreshBtn');
+    if (!btn || btn.disabled) return;
+    if (isGuest()) {
+      alert('访客模式下无法刷新快讯，请使用管理员账号登录。');
+      return;
+    }
+    if (!recApiToken()) {
+      alert('请先在「系统设置 → 推荐机型接口配置」中填写管理令牌（X-Admin-Token），再刷新快讯。');
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = '刷新中…';
+    recRequest('/api/news-refresh', { method: 'POST' }).then(function (data) {
+      if (data && data.ok === false) throw new Error((data && (data.error || data.message)) || '服务端返回失败');
+      var cnt = (data && typeof data.count === 'number')
+        ? data.count
+        : ((data && Array.isArray(data.items)) ? data.items.length : 0);
+      var at = recFmtTime(data && (data.updatedAt || data.date));
+      return loadNews(true).then(function () {
+        alert('快讯已刷新：共 ' + cnt + ' 条 · 更新时间 ' + at);
+      });
+    }).catch(function (err) {
+      alert('刷新快讯失败：' + ((err && err.message) ? err.message : '未知错误'));
+    }).finally(function () {
+      btn.disabled = false;
+      btn.textContent = '立即刷新快讯';
     });
   }
   function liveFmtTime(t) {
@@ -1980,7 +2078,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       box.innerHTML = liveRows(recs, function (r) {
         return '<div class="live-item"><span class="live-tag">' + recStatusText(r.status || 'pending') + '</span>'
           + '<span class="live-title">' + esc(r.nameZh || '（无名）') + (r.code ? '（' + esc(r.code) + '）' : '') + '</span>'
-          + '<span class="live-time">' + esc(liveFmtTime(r.submittedAt)) + '</span></div>';
+          + '<span class="live-time">' + esc(recFmtTime(r.submittedAt)) + '</span></div>';
       }, '暂无推荐机型');
     }
     var t = $('liveRecTime');
@@ -2014,7 +2112,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       }, '今日暂无航空快讯');
     }
     var t = $('liveNewsTime');
-    if (t) t.textContent = NEWS_STATE.error ? '同步失败' : (NEWS_STATE.updatedAt ? ('更新于 ' + liveFmtTime(NEWS_STATE.updatedAt)) : '未同步');
+    if (t) t.textContent = NEWS_STATE.error ? '同步失败' : (NEWS_STATE.updatedAt ? ('更新于 ' + recFmtTime(NEWS_STATE.updatedAt)) : '未同步');
   }
   function loadLiveGitHub() {
     var box = $('liveGhList');
@@ -3157,6 +3255,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     $('logoutOtherBtn').addEventListener('click', logoutOthers);
     $('logoutAllBtn').addEventListener('click', logoutAllSessions);
     $('recRefreshBtn').addEventListener('click', function () { loadRecommendations(true); });
+    $('newsRefreshBtn').addEventListener('click', refreshNewsNow);
     $('recChips').addEventListener('click', function (e) {
       var chip = e.target.closest('#recChips .chip');
       if (!chip) return;

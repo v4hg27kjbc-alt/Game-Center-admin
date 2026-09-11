@@ -673,6 +673,10 @@ input, select { font-family: inherit; }
   .login-card { padding: 30px 22px 20px; }
   .msg-card { width: calc(100vw - 24px); }
   .visitor-body { padding: 0 12px 12px; }
+  /* 顶部横向导航：480px 下改为换行铺满，避免最后几项被右边缘裁切 */
+  .sidebar { flex-wrap: wrap; row-gap: 6px; }
+  .nav { flex: 1 1 100%; flex-wrap: wrap; overflow-x: visible; }
+  .nav-item { flex: 0 0 auto; }
 }
 
 /* ===== 顶部铃铛 SVG ===== */
@@ -904,6 +908,64 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
 .nav-item.with-ic { display: flex; align-items: center; gap: 8px; }
 .nav-item.with-ic svg { flex-shrink: 0; }
 @media (max-width: 720px) { .gh-preview { -webkit-line-clamp: 2; } }
+
+/* ===== 首页实时信息（置顶中央主区，复用卡片视觉语言） ===== */
+.live-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
+.live-list { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.live-item {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(20,38,68,.5); border: 1px solid rgba(120,180,255,.16);
+  border-radius: 12px; padding: 8px 12px;
+}
+.live-item .live-title { flex: 1; min-width: 0; font-size: 13px; color: rgba(215,232,255,.85); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live-item .live-time { flex: 0 0 auto; font-size: 11px; color: rgba(190,220,255,.5); }
+.live-tag {
+  flex: 0 0 auto; font-size: 11px; padding: 2px 8px; border-radius: 8px;
+  background: rgba(64,145,255,.18); color: #9cc4ff; border: 1px solid rgba(64,145,255,.25);
+}
+.live-item a.live-title { text-decoration: none; }
+.live-item a.live-title:hover { color: #fff; text-decoration: underline; }
+.live-empty { text-align: center; color: rgba(190,220,255,.45); font-size: 12.5px; padding: 16px 0; }
+.live-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.live-head .live-sub { font-size: 12px; color: var(--text-dim); }
+
+/* ===== 推荐机型审核列表 ===== */
+.rec-list { display: flex; flex-direction: column; gap: 12px; }
+.rec-item {
+  display: flex; gap: 14px; flex-wrap: wrap;
+  background: var(--card-bg); border: 1px solid var(--glass-border); border-radius: 14px;
+  padding: 14px 16px;
+  backdrop-filter: blur(12px) saturate(160%); -webkit-backdrop-filter: blur(12px) saturate(160%);
+  transition: border-color 0.2s, background 0.2s;
+}
+.rec-item:hover { border-color: var(--glass-border-hover); background: var(--card-bg-hover); }
+.rec-thumb {
+  width: 96px; height: 68px; flex: 0 0 96px; border-radius: 10px; overflow: hidden;
+  background: rgba(120,180,255,.08); border: 1px solid rgba(120,180,255,.18);
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(190,220,255,.5); font-size: 11px;
+}
+.rec-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rec-main { flex: 1; min-width: 200px; }
+.rec-name { font-size: 14px; font-weight: 600; color: var(--text-heading); }
+.rec-meta { font-size: 12px; color: var(--text-dim); margin-top: 3px; word-break: break-all; }
+.rec-desc { font-size: 12.5px; color: rgba(215,232,255,.82); margin-top: 6px; line-height: 1.6; }
+.rec-reply { margin-top: 6px; font-size: 12.5px; color: #7fe3c8; word-break: break-word; }
+.rec-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.rec-status { font-size: 11px; padding: 3px 9px; border-radius: 20px; font-weight: 600; }
+.rec-status.pending { background: rgba(255,190,90,.15); color: #ffbe5a; }
+.rec-status.approved { background: rgba(127,227,200,.14); color: #7fe3c8; }
+.rec-status.rejected { background: rgba(255,95,126,.14); color: #ff8fa3; }
+.rec-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.rec-uid { font-family: ui-monospace, Menlo, monospace; }
+
+@media (max-width: 980px) { .live-grid { grid-template-columns: 1fr; } }
+@media (max-width: 720px) {
+  .rec-item { flex-direction: column; }
+  .rec-side { align-items: flex-start; }
+  .rec-thumb { width: 100%; height: 150px; flex: 0 0 auto; }
+  .content { overflow-x: hidden; }
+}
 </style>
 </head>
 <body>
@@ -934,7 +996,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     <nav class="nav">
       <a href="#" class="nav-item active" data-page="dashboard">数据看板</a>
       <a href="#" class="nav-item" data-page="feedbacks" data-role="owner,admin">反馈管理</a>
-      <a href="#" class="nav-item with-ic" data-page="github-feedbacks" data-role="owner,admin"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub 反馈</a>
+      <a href="#" class="nav-item with-ic" data-page="github-feedbacks" data-role="owner,admin"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub 与推荐</a>
       <a href="#" class="nav-item" data-page="notices" data-role="owner,admin">公告管理</a>
       <a href="#" class="nav-item" data-page="trash" data-role="owner,admin">回收站</a>
       <a href="#" class="nav-item" data-page="sites" data-role="owner">站点管理</a>
@@ -959,6 +1021,30 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     <main class="content">
       <!-- 数据看板 -->
       <section id="page-dashboard" class="page">
+        <!-- 实时信息（中央主区置顶）：最新推荐 / 最新 GitHub 反馈 / 今日航空快讯 -->
+        <div class="live-grid">
+          <div class="chart-card">
+            <div class="live-head">
+              <h3>最新推荐机型</h3>
+              <span class="live-sub" id="liveRecTime">未同步</span>
+            </div>
+            <div id="liveRecList" class="live-list"></div>
+          </div>
+          <div class="chart-card">
+            <div class="live-head">
+              <h3>最新 GitHub 反馈</h3>
+              <span class="live-sub" id="liveGhTime">未同步</span>
+            </div>
+            <div id="liveGhList" class="live-list"></div>
+          </div>
+          <div class="chart-card">
+            <div class="live-head">
+              <h3>今日航空快讯</h3>
+              <span class="live-sub" id="liveNewsTime">未同步</span>
+            </div>
+            <div id="liveNewsList" class="live-list"></div>
+          </div>
+        </div>
         <div class="ai-summary-card">
           <div class="ai-left">
             <h3>AI 自动总结 <span class="ai-badge" style="position: static; display: inline-flex; vertical-align: 2px;">AI</span></h3>
@@ -1042,17 +1128,46 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       </section>
 
 
-      <!-- GitHub 反馈 -->
+      <!-- 数据聚合：GitHub 反馈 + 推荐机型（独立栏目，子 Tab 切换） -->
       <section id="page-github-feedbacks" class="page hidden">
         <div class="toolbar">
-          <div>
-            <div class="toolbar-title">GitHub 反馈</div>
-            <p class="gh-sub">自动拉取主站 gamecenter 仓库 GitHub Issues，查看访客提交的公开反馈</p>
+          <div class="chips" id="aggChips">
+            <button class="chip active" data-agg="github">GitHub 反馈</button>
+            <button class="chip" data-agg="recommend">推荐机型</button>
           </div>
-          <button id="ghRefreshBtn" class="btn btn-primary">刷新列表</button>
         </div>
-        <div id="ghStatus" class="gh-status"></div>
-        <div id="ghList" class="gh-list"></div>
+
+        <div id="aggGithub">
+          <div class="toolbar">
+            <div>
+              <div class="toolbar-title">GitHub 反馈</div>
+              <p class="gh-sub">自动拉取主站 gamecenter 仓库 GitHub Issues，查看访客提交的公开反馈</p>
+            </div>
+            <button id="ghRefreshBtn" class="btn btn-primary">刷新列表</button>
+          </div>
+          <div id="ghStatus" class="gh-status"></div>
+          <div id="ghList" class="gh-list"></div>
+        </div>
+
+        <div id="aggRecommend" class="hidden">
+          <div class="toolbar">
+            <div>
+              <div class="toolbar-title">推荐机型（用户提交）</div>
+              <p class="gh-sub">从管理端接口拉取用户推荐的机型，可【采纳】或【驳回】并填写反馈；进入页面自动拉取，之后每 60 秒轮询刷新</p>
+            </div>
+            <div class="toolbar-right">
+              <div class="chips" id="recChips">
+                <button class="chip active" data-rec="all">全部</button>
+                <button class="chip" data-rec="pending">待审核</button>
+                <button class="chip" data-rec="approved">已采纳</button>
+                <button class="chip" data-rec="rejected">已驳回</button>
+              </div>
+              <button id="recRefreshBtn" class="btn btn-primary">刷新列表</button>
+            </div>
+          </div>
+          <div id="recStatus" class="gh-status"></div>
+          <div id="recList" class="rec-list"></div>
+        </div>
       </section>
 
       <!-- 公告管理 -->
@@ -1125,13 +1240,32 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
         </div>
         <div class="settings-card">
           <h3>令牌管理</h3>
-          <p class="settings-desc">查看当前登录后台管理系统的设备与令牌，可下线设备或吊销令牌。</p>
+          <p class="settings-desc">查看与管理后台访问令牌，可下线设备或吊销令牌。</p>
           <div class="settings-row">
             <button id="logoutOtherBtn" class="btn btn-ghost">下线其他设备</button>
             <button id="logoutAllBtn" class="btn btn-danger">下线全部设备</button>
           </div>
-          <div id="sessionList" class="token-list"></div>
           <div id="adminTokenList" class="token-list"></div>
+        </div>
+        <div class="settings-card">
+          <h3>上线设备记录</h3>
+          <p class="settings-desc" id="sessionSummary">记录所有登录过本后台的设备与会话。点击【清空全部】将先自动导出 JSON 备份文件，再清空全部记录。</p>
+          <div class="settings-row">
+            <button id="clearSessionsBtn" class="btn btn-danger">清空全部</button>
+          </div>
+          <div id="sessionList" class="token-list"></div>
+        </div>
+        <div class="settings-card">
+          <h3>推荐机型接口配置</h3>
+          <p class="settings-desc">配置推荐机型管理接口的后端地址与管理令牌（请求头 X-Admin-Token），保存后用于首页实时信息与推荐机型的自动拉取、审核。</p>
+          <div class="form-stack">
+            <input type="text" id="apiBaseInput" class="input" placeholder="后端地址，如 https://henry126923-admincenter.pages.dev">
+            <input type="password" id="apiTokenInput" class="input" placeholder="管理令牌 X-Admin-Token" autocomplete="off">
+            <div class="settings-row">
+              <button id="saveApiBtn" class="btn btn-primary">保存配置</button>
+            </div>
+            <div id="apiMsg" class="form-msg"></div>
+          </div>
         </div>
         <div class="settings-card">
           <h3>访客管理</h3>
@@ -1140,6 +1274,22 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
         </div>
       </section>
     </main>
+  </div>
+</div>
+
+<!-- 推荐机型审核弹窗 -->
+<div id="recModal" class="modal hidden">
+  <div class="modal-mask"></div>
+  <div class="modal-card">
+    <h3 id="recModalTitle">审核推荐机型</h3>
+    <p class="settings-desc" id="recModalDesc"></p>
+    <form id="recForm" class="form-stack">
+      <textarea id="recReplyInput" class="textarea" placeholder="填写反馈内容（将展示给提交用户）"></textarea>
+      <div class="modal-actions">
+        <button type="button" id="recCancelBtn" class="btn btn-ghost">取消</button>
+        <button type="submit" id="recSubmitBtn" class="btn btn-primary">提交反馈</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -1386,6 +1536,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     loadFeedbacks();
     renderSites();
     switchPage('dashboard');
+    recStartPolling();
   }
 
   function renderUserChip() {
@@ -1423,11 +1574,11 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     for (var j = 0; j < navs.length; j++) {
       navs[j].classList.toggle('active', navs[j].getAttribute('data-page') === name);
     }
-    var titles = { dashboard: '数据看板', feedbacks: '反馈管理', 'github-feedbacks': 'GitHub 反馈', notices: '公告管理', trash: '回收站', sites: '站点管理', settings: '系统设置' };
+    var titles = { dashboard: '数据看板', feedbacks: '反馈管理', 'github-feedbacks': 'GitHub 与推荐', notices: '公告管理', trash: '回收站', sites: '站点管理', settings: '系统设置' };
     $('pageTitle').textContent = titles[name] || '';
-    if (name === 'dashboard') { loadStats(); renderTrend(); renderRecent(); renderNotes(); }
+    if (name === 'dashboard') { loadStats(); renderTrend(); renderRecent(); renderNotes(); refreshLivePanels(); }
     if (name === 'feedbacks') loadFeedbacks();
-    if (name === 'github-feedbacks') loadGitHubIssues(false);
+    if (name === 'github-feedbacks') { loadGitHubIssues(false); switchAggTab(REC_STATE.aggTab); }
     if (name === 'notices') renderNotices();
     if (name === 'trash') renderTrash();
     if (name === 'sites') renderSites();
@@ -1591,6 +1742,382 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     }).finally(function () {
       GH_LOADING = false;
     });
+  }
+
+  // ===== 推荐机型（管理端接口：/api/recommendations、/api/review、/api/news） =====
+  var REC_API_DEFAULT = 'https://henry126923-admincenter.pages.dev';
+  var REC_POLL_MS = 60000;
+  var REC_STATE = { items: [], loading: false, error: '', filter: 'all', lastSync: '', timer: null, aggTab: 'github', review: null };
+  var NEWS_STATE = { items: [], updatedAt: '', error: '', loaded: false };
+  var LIVE_GH = { items: [], ts: '' };
+
+  function recApiBase() {
+    var b = (db && db.settings && db.settings.adminApiBase) ? String(db.settings.adminApiBase) : '';
+    if (!b) b = REC_API_DEFAULT;
+    return b.replace(/\/+$/, '');
+  }
+  function recApiToken() {
+    return (db && db.settings && db.settings.adminToken) ? String(db.settings.adminToken) : '';
+  }
+  function recStatusText(st) {
+    if (st === 'approved') return '已采纳';
+    if (st === 'rejected') return '已驳回';
+    return '待审核';
+  }
+  function recImgUrl(img) {
+    if (!img) return '';
+    var s = String(img);
+    if (/^data:/i.test(s) || /^https?:\/\//i.test(s)) return s;
+    if (s.charAt(0) === '/') return recApiBase() + s;
+    return s;
+  }
+  function recExtractList(data, keys) {
+    if (Array.isArray(data)) return data;
+    if (data && typeof data === 'object') {
+      for (var i = 0; i < keys.length; i++) {
+        if (Array.isArray(data[keys[i]])) return data[keys[i]];
+      }
+    }
+    return [];
+  }
+  function recRequest(path, opts) {
+    opts = opts || {};
+    var headers = { 'Accept': 'application/json' };
+    if (recApiToken()) headers['X-Admin-Token'] = recApiToken();
+    if (opts.body) headers['Content-Type'] = 'application/json';
+    var init = { method: opts.method || 'GET', headers: headers };
+    if (opts.body) init.body = JSON.stringify(opts.body);
+    if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) init.signal = AbortSignal.timeout(15000);
+    return fetch(recApiBase() + path, init).then(function (res) {
+      return res.text().then(function (txt) {
+        var data = null;
+        try { data = txt ? JSON.parse(txt) : null; } catch (e) { data = null; }
+        if (!res.ok) {
+          var em = (data && (data.error || data.message)) ? (data.error || data.message) : ('HTTP ' + res.status);
+          var err = new Error(em);
+          err.status = res.status;
+          throw err;
+        }
+        if (data === null) throw new Error('返回数据格式异常');
+        return data;
+      });
+    });
+  }
+  function loadRecommendations(force) {
+    var status = $('recStatus');
+    if (!status || REC_STATE.loading) return;
+    if (isGuest()) return;
+    if (!REC_STATE.items.length || force) {
+      status.className = 'gh-status';
+      status.innerHTML = '<span class="gh-hint">正在从管理端接口拉取推荐机型…</span>';
+    }
+    REC_STATE.loading = true;
+    recRequest('/api/recommendations').then(function (data) {
+      REC_STATE.items = recExtractList(data, ['items', 'data', 'list', 'recommendations']);
+      REC_STATE.error = '';
+      REC_STATE.lastSync = nowStr();
+      renderRecommendations();
+      renderLiveRec();
+    }).catch(function (err) {
+      REC_STATE.error = (err && err.message) ? err.message : '未知错误';
+      renderRecommendations();
+      renderLiveRec();
+    }).finally(function () { REC_STATE.loading = false; });
+  }
+  function filteredRecommendations() {
+    return REC_STATE.items.filter(function (r) {
+      if (REC_STATE.filter !== 'all' && (r.status || 'pending') !== REC_STATE.filter) return false;
+      return true;
+    });
+  }
+  function renderRecommendations() {
+    var list = $('recList');
+    var status = $('recStatus');
+    if (!list || !status) return;
+    var all = REC_STATE.items;
+    var labels = { all: '全部', pending: '待审核', approved: '已采纳', rejected: '已驳回' };
+    var counts = { all: all.length, pending: 0, approved: 0, rejected: 0 };
+    for (var i = 0; i < all.length; i++) {
+      var st = all[i].status || 'pending';
+      if (counts[st] === undefined) counts[st] = 0;
+      counts[st]++;
+    }
+    var chips = document.querySelectorAll('#recChips .chip');
+    for (var c = 0; c < chips.length; c++) {
+      var key = chips[c].getAttribute('data-rec');
+      chips[c].textContent = (labels[key] || key) + '（' + (counts[key] || 0) + '）';
+      chips[c].classList.toggle('active', key === REC_STATE.filter);
+    }
+    if (REC_STATE.error) {
+      list.innerHTML = '<div class="gh-err">拉取失败：' + esc(REC_STATE.error)
+        + '<br>请确认「系统设置 → 推荐机型接口配置」中的后端地址与管理令牌，然后点击「刷新列表」重试。</div>';
+      status.className = 'gh-status';
+      status.innerHTML = '<span class="gh-hint">同步异常' + (REC_STATE.lastSync ? '（上次成功：' + esc(REC_STATE.lastSync) + '）' : '') + '</span>';
+      return;
+    }
+    var shown = filteredRecommendations();
+    status.className = 'gh-status';
+    status.innerHTML = '<span class="gh-hint">共 ' + all.length + ' 条推荐，当前筛选 ' + shown.length + ' 条 · 上次同步 ' + esc(REC_STATE.lastSync || '—') + ' · 每 60 秒自动刷新</span>';
+    if (!shown.length) {
+      list.innerHTML = '<p class="empty">暂无推荐机型记录</p>';
+      return;
+    }
+    var html = '';
+    for (var j = 0; j < shown.length; j++) {
+      var r = shown[j];
+      var stt = r.status || 'pending';
+      var rawImg = r.image || r.imageUrl || (r.image_key ? ('/api/image/' + r.image_key) : '');
+      var img = recImgUrl(rawImg);
+      var specs = r.specs ? (typeof r.specs === 'string' ? r.specs : JSON.stringify(r.specs)) : '';
+      html += '<div class="rec-item">'
+        + '<div class="rec-thumb">' + (img ? '<img src="' + esc(img) + '" alt="机型照片" loading="lazy">' : '暂无照片') + '</div>'
+        + '<div class="rec-main">'
+        + '<div class="rec-name">' + esc(r.nameZh || '（无名）') + '</div>'
+        + '<div class="rec-meta">型号：' + esc(r.code || '—') + ' · 分类：' + esc(r.category || '—') + ' · 国家/地区：' + esc(r.country || '—') + '</div>'
+        + '<div class="rec-meta">提交人匿名ID：<span class="rec-uid">' + esc(r.uid || '—') + '</span> · 提交时间：' + esc(r.submittedAt || '—') + '</div>'
+        + (r.descZh ? '<div class="rec-desc">' + esc(r.descZh) + '</div>' : '')
+        + (specs ? '<div class="rec-desc">规格：' + esc(specs) + '</div>' : '')
+        + (r.reply ? '<div class="rec-reply">管理员反馈：' + esc(r.reply) + '</div>' : '')
+        + '</div>'
+        + '<div class="rec-side">'
+        + '<span class="rec-status ' + stt + '">' + recStatusText(stt) + '</span>'
+        + '<div class="rec-actions">'
+        + '<button class="btn btn-primary btn-sm" data-rec-act="approved" data-id="' + esc(r.id) + '">采纳</button>'
+        + '<button class="btn btn-danger btn-sm" data-rec-act="rejected" data-id="' + esc(r.id) + '">驳回</button>'
+        + '</div>'
+        + (r.reviewedAt ? '<span class="live-sub">审核于 ' + esc(r.reviewedAt) + '</span>' : '')
+        + '</div></div>';
+    }
+    list.innerHTML = html;
+    var imgs = list.querySelectorAll('.rec-thumb img');
+    for (var m = 0; m < imgs.length; m++) {
+      imgs[m].addEventListener('error', function () {
+        this.style.display = 'none';
+        if (this.parentNode) this.parentNode.textContent = '暂无照片';
+      });
+    }
+  }
+  function openRecReview(id, status) {
+    var item = null;
+    for (var i = 0; i < REC_STATE.items.length; i++) {
+      if (String(REC_STATE.items[i].id) === String(id)) { item = REC_STATE.items[i]; break; }
+    }
+    REC_STATE.review = { id: id, status: status };
+    $('recModalTitle').textContent = (status === 'approved' ? '采纳' : '驳回') + '推荐机型';
+    $('recModalDesc').textContent = '机型：' + (item ? ((item.nameZh || '（无名）') + (item.code ? '（' + item.code + '）' : '')) : id) + '。反馈内容将展示给提交用户。';
+    $('recReplyInput').value = (item && item.reply) ? item.reply : '';
+    $('recModal').classList.remove('hidden');
+    $('recReplyInput').focus();
+  }
+  function closeRecReview() {
+    $('recModal').classList.add('hidden');
+    REC_STATE.review = null;
+  }
+  function submitRecReview(e) {
+    e.preventDefault();
+    var rv = REC_STATE.review;
+    if (!rv) return;
+    var reply = $('recReplyInput').value.trim();
+    var btn = $('recSubmitBtn');
+    btn.disabled = true;
+    btn.textContent = '提交中…';
+    recRequest('/api/review', { method: 'POST', body: { id: rv.id, status: rv.status, reply: reply } }).then(function () {
+      for (var i = 0; i < REC_STATE.items.length; i++) {
+        if (String(REC_STATE.items[i].id) === String(rv.id)) {
+          REC_STATE.items[i].status = rv.status;
+          REC_STATE.items[i].reply = reply;
+          REC_STATE.items[i].reviewedAt = nowStr();
+        }
+      }
+      renderRecommendations();
+      renderLiveRec();
+      closeRecReview();
+      alert(rv.status === 'approved' ? '已采纳，该机型将出现在主站「已采纳机型」列表中。' : '已驳回，反馈内容已写回后端。');
+    }).catch(function (err) {
+      alert('提交失败：' + ((err && err.message) ? err.message : '未知错误'));
+    }).finally(function () {
+      btn.disabled = false;
+      btn.textContent = '提交反馈';
+    });
+  }
+  function loadNews(force) {
+    if (NEWS_STATE.loaded && !force) return;
+    if (isGuest()) return;
+    recRequest('/api/news').then(function (data) {
+      NEWS_STATE.items = recExtractList(data, ['items', 'data', 'list', 'news']);
+      NEWS_STATE.updatedAt = (data && (data.updatedAt || data.date)) ? (data.updatedAt || data.date) : '';
+      NEWS_STATE.error = '';
+      NEWS_STATE.loaded = true;
+      renderLiveNews();
+    }).catch(function (err) {
+      NEWS_STATE.error = (err && err.message) ? err.message : '未知错误';
+      NEWS_STATE.loaded = true;
+      renderLiveNews();
+    });
+  }
+  function liveFmtTime(t) {
+    if (!t) return '';
+    var s = String(t);
+    if (s.indexOf('T') > 0) return ghFmtTime(s);
+    return s;
+  }
+  function liveRows(items, mapFn, emptyText) {
+    if (!items || !items.length) return '<div class="live-empty">' + esc(emptyText) + '</div>';
+    var html = '';
+    var n = Math.min(items.length, 4);
+    for (var i = 0; i < n; i++) html += mapFn(items[i], i);
+    return html;
+  }
+  function renderLiveRec() {
+    var box = $('liveRecList');
+    if (!box) return;
+    var recs = REC_STATE.items.slice().sort(function (a, b) {
+      return String(b.submittedAt || '').localeCompare(String(a.submittedAt || ''));
+    });
+    if (REC_STATE.error && !recs.length) {
+      box.innerHTML = '<div class="gh-err">接口暂不可用：' + esc(REC_STATE.error) + '</div>';
+    } else {
+      box.innerHTML = liveRows(recs, function (r) {
+        return '<div class="live-item"><span class="live-tag">' + recStatusText(r.status || 'pending') + '</span>'
+          + '<span class="live-title">' + esc(r.nameZh || '（无名）') + (r.code ? '（' + esc(r.code) + '）' : '') + '</span>'
+          + '<span class="live-time">' + esc(liveFmtTime(r.submittedAt)) + '</span></div>';
+      }, '暂无推荐机型');
+    }
+    var t = $('liveRecTime');
+    if (t) t.textContent = REC_STATE.lastSync ? ('同步于 ' + REC_STATE.lastSync) : '未同步';
+  }
+  function renderLiveGh() {
+    var box = $('liveGhList');
+    if (!box) return;
+    box.innerHTML = liveRows(LIVE_GH.items, function (it) {
+      return '<div class="live-item"><span class="live-tag">' + ((it.state === 'closed') ? '已关闭' : '进行中') + '</span>'
+        + '<span class="live-title">' + esc(it.title || '(无标题)') + '</span>'
+        + '<span class="live-time">' + esc(ghFmtTime(it.created_at)) + '</span></div>';
+    }, '暂无 GitHub 反馈');
+    var t = $('liveGhTime');
+    if (t) t.textContent = LIVE_GH.ts ? ('同步于 ' + LIVE_GH.ts) : '未同步';
+  }
+  function renderLiveNews() {
+    var box = $('liveNewsList');
+    if (!box) return;
+    if (NEWS_STATE.error && !NEWS_STATE.items.length) {
+      box.innerHTML = '<div class="gh-err">快讯接口暂不可用：' + esc(NEWS_STATE.error) + '</div>';
+    } else {
+      box.innerHTML = liveRows(NEWS_STATE.items, function (n) {
+        var title = (typeof n === 'string') ? n : (n.title || n.name || n.text || '');
+        var time = (typeof n === 'string') ? '' : (n.time || n.date || n.publishedAt || '');
+        var url = (typeof n === 'string') ? '' : (n.url || n.link || '');
+        var inner = url
+          ? '<a class="live-title" href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(title) + '</a>'
+          : '<span class="live-title">' + esc(title) + '</span>';
+        return '<div class="live-item">' + inner + '<span class="live-time">' + esc(liveFmtTime(time)) + '</span></div>';
+      }, '今日暂无航空快讯');
+    }
+    var t = $('liveNewsTime');
+    if (t) t.textContent = NEWS_STATE.error ? '同步失败' : (NEWS_STATE.updatedAt ? ('更新于 ' + liveFmtTime(NEWS_STATE.updatedAt)) : '未同步');
+  }
+  function loadLiveGitHub() {
+    var box = $('liveGhList');
+    if (!box) return;
+    try {
+      var cached = JSON.parse(sessionStorage.getItem(GH_CACHE_KEY));
+      if (cached && Array.isArray(cached.items) && cached.items.length) {
+        LIVE_GH.items = cached.items;
+        LIVE_GH.ts = ghFmtTime(new Date(cached.ts).toISOString());
+      }
+    } catch (e) {}
+    renderLiveGh();
+    if (LIVE_GH.items.length) return;
+    fetch(GH_ISSUES_URL, { headers: { 'Accept': 'application/vnd.github+json' } }).then(function (res) {
+      return res.json();
+    }).then(function (data) {
+      if (!Array.isArray(data)) return;
+      LIVE_GH.items = data.filter(function (it) { return !it.pull_request; });
+      LIVE_GH.ts = nowStr();
+      renderLiveGh();
+    }).catch(function () {
+      if (!LIVE_GH.items.length) {
+        var b = $('liveGhList');
+        if (b) b.innerHTML = '<div class="gh-err">GitHub 接口暂不可用，可稍后在「GitHub 与推荐」栏目重试。</div>';
+      }
+    });
+  }
+  function switchAggTab(tab) {
+    REC_STATE.aggTab = (tab === 'recommend') ? 'recommend' : 'github';
+    var chips = document.querySelectorAll('#aggChips .chip');
+    for (var i = 0; i < chips.length; i++) {
+      chips[i].classList.toggle('active', chips[i].getAttribute('data-agg') === REC_STATE.aggTab);
+    }
+    $('aggGithub').classList.toggle('hidden', REC_STATE.aggTab !== 'github');
+    $('aggRecommend').classList.toggle('hidden', REC_STATE.aggTab !== 'recommend');
+    if (REC_STATE.aggTab === 'recommend') loadRecommendations(false);
+  }
+  function refreshLivePanels() {
+    loadRecommendations(false);
+    loadNews(false);
+    loadLiveGitHub();
+  }
+  function recStartPolling() {
+    if (REC_STATE.timer) return;
+    REC_STATE.timer = setInterval(function () {
+      if ($('mainPage').classList.contains('hidden') || isGuest()) return;
+      loadRecommendations(false);
+      if (REC_STATE.aggTab === 'recommend') renderRecommendations();
+    }, REC_POLL_MS);
+  }
+  function saveApiConfig() {
+    var base = $('apiBaseInput').value.trim();
+    var token = $('apiTokenInput').value.trim();
+    var msg = $('apiMsg');
+    if (base && !/^https?:\/\//i.test(base)) {
+      msg.className = 'form-msg err';
+      msg.textContent = '后端地址需以 http:// 或 https:// 开头';
+      return;
+    }
+    db.settings.adminApiBase = base.replace(/\/+$/, '');
+    db.settings.adminToken = token;
+    saveDB();
+    msg.className = 'form-msg ok';
+    msg.textContent = '配置已保存，正在重新拉取…';
+    loadRecommendations(true);
+    loadNews(true);
+    setTimeout(function () {
+      var m = $('apiMsg');
+      if (m && m.className.indexOf('ok') >= 0) m.textContent = '配置已保存';
+    }, 2000);
+  }
+  function updateSessionSummary() {
+    var el = $('sessionSummary');
+    if (!el) return;
+    var n = (db.sessions || []).length;
+    el.textContent = '记录所有登录过本后台的设备与会话，当前共 ' + n + ' 条。点击【清空全部】将先自动导出 JSON 备份文件，再清空全部记录。';
+  }
+  function clearSessionsWithBackup() {
+    var list = (db.sessions || []).slice();
+    var n = list.length;
+    if (!n) { alert('当前没有上线设备记录，无需清空。'); return; }
+    if (!confirm('确认清空全部上线设备记录？\n\n将删除 ' + n + ' 条记录；清空前会自动导出一份 JSON 备份文件。\n清空后所有设备需重新登录（含当前设备），此操作不可撤销。')) return;
+    var backup = { exportedAt: nowStr(), type: 'sessions_backup', count: n, sessions: list };
+    var fileName = 'sessions-backup-' + todayStr() + '.json';
+    try {
+      var blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 3000);
+    } catch (err) {
+      alert('备份文件导出失败，已取消清空操作：' + ((err && err.message) ? err.message : '未知错误'));
+      return;
+    }
+    db.sessions = [];
+    saveDB();
+    renderSessionList();
+    updateSessionSummary();
+    alert('已清空上线设备记录，共删除 ' + n + ' 条。\n备份文件：' + fileName + '（已保存到浏览器下载目录）');
   }
 
   // ===== 反馈 =====
@@ -2321,6 +2848,9 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     renderSessionList();
     renderAdminTokenList();
     renderVisitorAdminList();
+    var bi = $('apiBaseInput'); if (bi) bi.value = (db.settings.adminApiBase || '');
+    var ti = $('apiTokenInput'); if (ti) ti.value = (db.settings.adminToken || '');
+    updateSessionSummary();
     touchSession(); saveDB();
   }
 
@@ -2626,6 +3156,27 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     $('aiCloseBtn').addEventListener('click', closeAiResult);
     $('logoutOtherBtn').addEventListener('click', logoutOthers);
     $('logoutAllBtn').addEventListener('click', logoutAllSessions);
+    $('recRefreshBtn').addEventListener('click', function () { loadRecommendations(true); });
+    $('recChips').addEventListener('click', function (e) {
+      var chip = e.target.closest('#recChips .chip');
+      if (!chip) return;
+      REC_STATE.filter = chip.getAttribute('data-rec') || 'all';
+      renderRecommendations();
+    });
+    $('recList').addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-rec-act]');
+      if (!btn) return;
+      openRecReview(btn.getAttribute('data-id'), btn.getAttribute('data-rec-act'));
+    });
+    $('recCancelBtn').addEventListener('click', closeRecReview);
+    $('recForm').addEventListener('submit', submitRecReview);
+    $('aggChips').addEventListener('click', function (e) {
+      var chip = e.target.closest('#aggChips .chip');
+      if (!chip) return;
+      switchAggTab(chip.getAttribute('data-agg'));
+    });
+    $('clearSessionsBtn').addEventListener('click', clearSessionsWithBackup);
+    $('saveApiBtn').addEventListener('click', saveApiConfig);
     document.querySelectorAll('.nav-item').forEach(function (it) {
       it.addEventListener('click', function (e) { e.preventDefault(); switchPage(it.getAttribute('data-page')); });
     });

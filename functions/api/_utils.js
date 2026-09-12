@@ -25,6 +25,7 @@ export function corsHeaders(request) {
   const allow = ALLOWED_ORIGINS.indexOf(origin) >= 0 ? origin : MAIN_SITE_ORIGIN;
   return {
     'Access-Control-Allow-Origin': allow,
+    'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Token, Accept',
     'Access-Control-Max-Age': '86400',
@@ -33,12 +34,13 @@ export function corsHeaders(request) {
 }
 
 /** 统一 JSON 响应 */
-export function json(data, status = 200, request = null) {
+export function json(data, status = 200, request = null, extraHeaders = null) {
   const headers = {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store'
   };
   if (request) Object.assign(headers, corsHeaders(request));
+  if (extraHeaders && typeof extraHeaders === 'object') Object.assign(headers, extraHeaders);
   return new Response(JSON.stringify(data), { status, headers });
 }
 
@@ -62,22 +64,225 @@ export function adminTokenOf(request) {
   return request.headers.get('X-Admin-Token') || '';
 }
 
-/**
- * 管理员鉴权：请求头 X-Admin-Token 与环境变量 ADMIN_TOKEN 比对。
- * 未配置 ADMIN_TOKEN 时一律拒绝（避免接口裸奔）。
- */
-export function isAdmin(request, env) {
-  const expect = (env && env.ADMIN_TOKEN) ? String(env.ADMIN_TOKEN) : '';
-  if (!expect) return false;
-  const token = adminTokenOf(request);
-  if (!token || token.length !== expect.length) return false;
+/* ==================== 服务端会话（HttpOnly Cookie） ==================== */
+
+/** 会话 Cookie 名 */
+export const SESSION_COOKIE = 'mv_admin';
+
+/** 常量时间字符串比较（长度不同直接判定不等） */
+function constTimeEqual(a, b) {
+  const x = (a === undefined || a === null) ? '' : String(a);
+  const y = (b === undefined || b === null) ? '' : String(b);
+  if (!x || !y || x.length !== y.length) return false;
   let diff = 0;
-  for (let i = 0; i < expect.length; i++) diff |= expect.charCodeAt(i) ^ token.charCodeAt(i);
+  for (let i = 0; i < x.length; i++) diff |= x.charCodeAt(i) ^ y.charCodeAt(i);
   return diff === 0;
 }
 
+/** UTF-8 安全的 base64url 编码；异常返回空串 */
+function b64urlEncode(str) {
+  try {
+    const bytes = new TextEncoder().encode(String(str));
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  } catch (e) { return ''; }
+}
+
+/** base64url 解码为 UTF-8 字符串；异常返回空串 */
+function b64urlDecode(s) {
+  try {
+    const t = String(s || '').replace(/-/g, '+').replace(/_/g, '/');
+    const pad = t.length % 4 ? new Array(5 - (t.length % 4)).join('=') : '';
+    const bin = atob(t + pad);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  } catch (e) { return ''; }
+}
+
+/** HMAC-SHA256 → 小写 hex；异常返回空串 */
+async function hmacHex(key, msg) {
+  try {
+    const enc = new TextEncoder();
+    const k = await crypto.subtle.importKey(
+      'raw', enc.encode(String(key || '')), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+    );
+    const sig = await crypto.subtle.sign('HMAC', k, enc.encode(String(msg || '')));
+    const b = new Uint8Array(sig);
+    let out = '';
+    for (let i = 0; i < b.length; i++) out += ('0' + b[i].toString(16)).slice(-2);
+    return out;
+  } catch (e) { return ''; }
+}
+
+/** SHA-256 → 小写 hex；异常返回空串 */
+async function sha256Hex(text) {
+  try {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(text || '')));
+    const b = new Uint8Array(buf);
+    let out = '';
+    for (let i = 0; i < b.length; i++) out += ('0' + b[i].toString(16)).slice(-2);
+    return out;
+  } catch (e) { return ''; }
+}
+
+/** 读取指定 Cookie 的值；不存在返回空串 */
+export function cookieOf(request, name) {
+  try {
+    const raw = (request && request.headers.get('Cookie')) || '';
+    const parts = raw.split(';');
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i].trim();
+      if (!p) continue;
+      const idx = p.indexOf('=');
+      if (idx < 0) continue;
+      if (p.slice(0, idx).trim() === name) return p.slice(idx + 1).trim();
+    }
+  } catch (e) { /* 无 Cookie 头 */ }
+  return '';
+}
+
+/** 签发会话令牌：base64url(payload) + '.' + hmacHex；密钥取 env.ADMIN_TOKEN，未配置返回空串 */
+export async function signSession(env, payload) {
+  try {
+    const key = (env && env.ADMIN_TOKEN) ? String(env.ADMIN_TOKEN) : '';
+    if (!key) return '';
+    const body = b64urlEncode(JSON.stringify(payload || {}));
+    if (!body) return '';
+    const sig = await hmacHex(key, body);
+    if (!sig) return '';
+    return body + '.' + sig;
+  } catch (e) { return ''; }
+}
+
+/** 校验会话：签名常量时间比对 + 过期时间判断；失败一律返回 null */
+export async function verifySession(request, env) {
+  try {
+    const key = (env && env.ADMIN_TOKEN) ? String(env.ADMIN_TOKEN) : '';
+    if (!key) return null;
+    const token = cookieOf(request, SESSION_COOKIE);
+    if (!token) return null;
+    const dot = token.lastIndexOf('.');
+    if (dot <= 0 || dot >= token.length - 1) return null;
+    const body = token.slice(0, dot);
+    const sig = token.slice(dot + 1);
+    const expect = await hmacHex(key, body);
+    if (!expect || !constTimeEqual(expect, sig)) return null;
+    let payload = null;
+    try { payload = JSON.parse(b64urlDecode(body)); } catch (e) { payload = null; }
+    if (!payload || typeof payload !== 'object') return null;
+    const exp = Number(payload.exp || 0);
+    if (!exp || exp <= Date.now()) return null;
+    return payload;
+  } catch (e) { return null; }
+}
+
+/** 下发会话 Cookie（默认 7 天） */
+export function sessionSetCookie(value, maxAge) {
+  const age = (typeof maxAge === 'number' && maxAge > 0) ? Math.floor(maxAge) : 604800;
+  return SESSION_COOKIE + '=' + String(value || '')
+    + '; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=' + age;
+}
+
+/** 清除会话 Cookie */
+export function sessionClearCookie() {
+  return SESSION_COOKIE + '=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0';
+}
+
+/* ==================== 管理员鉴权 ==================== */
+
+/**
+ * 管理员鉴权（异步）：
+ *   1) 优先校验服务端会话 Cookie（登录后自动签发，前端无需再填令牌）；
+ *   2) 会话无效时回退旧的请求头 X-Admin-Token 与 env.ADMIN_TOKEN 比对（备用兼容）。
+ * 未配置 ADMIN_TOKEN 时会话与令牌两种方式都无法通过（避免接口裸奔）。
+ */
+export async function isAdmin(request, env) {
+  try {
+    const payload = await verifySession(request, env);
+    if (payload) return true;
+  } catch (e) { /* 会话不可用 → 回退令牌方式 */ }
+  const expect = (env && env.ADMIN_TOKEN) ? String(env.ADMIN_TOKEN) : '';
+  if (!expect) return false;
+  const token = adminTokenOf(request);
+  if (!token) return false;
+  return constTimeEqual(token, expect);
+}
+
+/** 是否已配置任一管理密码来源（KV 的 admin:auth / 环境变量 ADMIN_PASSWORD / 令牌 ADMIN_TOKEN） */
+export function adminPasswordConfigured(env) {
+  return !!(env && (env.ADMIN_PASSWORD || env.NEWS_KV || env.ADMIN_TOKEN));
+}
+
+/**
+ * 校验管理员登录凭据。
+ * 密码源优先级：
+ *   1) KV（NEWS_KV 的 admin:auth，存 { user, salt, hash }，hash = sha256hex(salt + password)）
+ *   2) 环境变量 ADMIN_PASSWORD（明文比对）
+ *   3) 环境变量 ADMIN_TOKEN（明文比对）—— 即管理令牌本身可直接作为服务端登录密码使用
+ * 返回 true（通过）/ false（不通过）/ 'not_configured'（三者都未配置）。
+ */
+export async function verifyAdminCredentials(env, username, password) {
+  try {
+    const expectUser = (env && env.ADMIN_USER) ? String(env.ADMIN_USER) : 'henry';
+    const name = str(username, 80);
+    const pwd = (password === undefined || password === null) ? '' : String(password);
+    if (!name || name.toLowerCase() !== expectUser.toLowerCase()) return false;
+
+    // 1) KV 中的密码记录（哈希优先，明文兼容）
+    let kvRecord = null;
+    try {
+      if (env && env.NEWS_KV) {
+        const raw = await env.NEWS_KV.get('admin:auth');
+        if (raw) { try { kvRecord = JSON.parse(raw); } catch (e) { kvRecord = null; } }
+      }
+    } catch (e) { kvRecord = null; }
+
+    if (kvRecord && typeof kvRecord === 'object') {
+      if (kvRecord.hash) {
+        const hash = await sha256Hex(String(kvRecord.salt || '') + pwd);
+        return !!hash && constTimeEqual(hash, String(kvRecord.hash));
+      }
+      if (typeof kvRecord.password === 'string') return constTimeEqual(kvRecord.password, pwd);
+    }
+
+    // 2) 回退环境变量明文密码
+    if (env && env.ADMIN_PASSWORD) return constTimeEqual(String(env.ADMIN_PASSWORD), pwd);
+
+    // 3) 兜底：KV 与 ADMIN_PASSWORD 均未配置时，管理令牌本身即可作为服务端登录密码
+    if (env && env.ADMIN_TOKEN) return constTimeEqual(String(env.ADMIN_TOKEN), pwd);
+
+    // 4) 三者都未配置
+    return 'not_configured';
+  } catch (e) { return false; }
+}
+
+/** 写入 / 更新管理密码（随机 salt + sha256 哈希），成功返回 true */
+export async function setAdminPassword(env, username, newPassword) {
+  try {
+    if (!env || !env.NEWS_KV) return false;
+    const pwd = (newPassword === undefined || newPassword === null) ? '' : String(newPassword);
+    if (!pwd) return false;
+    const saltBytes = new Uint8Array(16);
+    crypto.getRandomValues(saltBytes);
+    let salt = '';
+    for (let i = 0; i < saltBytes.length; i++) salt += ('0' + saltBytes[i].toString(16)).slice(-2);
+    const hash = await sha256Hex(salt + pwd);
+    if (!hash) return false;
+    const rec = {
+      user: str(username, 80) || ((env.ADMIN_USER) ? String(env.ADMIN_USER) : 'henry'),
+      salt: salt,
+      hash: hash,
+      updatedAt: new Date().toISOString()
+    };
+    await env.NEWS_KV.put('admin:auth', JSON.stringify(rec));
+    return true;
+  } catch (e) { return false; }
+}
+
 export function unauthorized(request) {
-  return fail('未授权：请在请求头携带正确的 X-Admin-Token', 401, request);
+  return fail('未授权：请先登录后台，或携带正确的 X-Admin-Token', 401, request);
 }
 
 export function nowIso() {

@@ -16,7 +16,8 @@
  *       值为 JSON 数组（新的在前），单条结构：
  *       { id, title, content, scope, revoked, createdAt, createdBy, revokedAt }
  *
- * 鉴权：复用 _utils.isAdmin（请求头 X-Admin-Token 与环境变量 ADMIN_TOKEN 比对）。
+ * 鉴权：复用 _utils.isAdmin（优先校验服务端会话 Cookie mv_admin；
+ *       会话无效时回退请求头 X-Admin-Token 与环境变量 ADMIN_TOKEN 比对）。
  * 容错：任何异常均返回结构化 JSON（HTTP 200 + ok:false，或 4xx/5xx 明确错误），
  *       主站侧对失败静默隐藏，不阻塞页面。
  */
@@ -88,7 +89,7 @@ export async function onRequestGet({ request, env }) {
 
     // 管理员视图：全部公告（含对内、含已撤回，便于撤回后仍可见记录）
     if (scope === 'admin') {
-      if (!isAdmin(request, env)) return unauthorized(request);
+      if (!(await isAdmin(request, env))) return unauthorized(request);
       let items = list;
       if (status === 'active') items = list.filter((it) => !it.revoked);
       else if (status === 'revoked') items = list.filter((it) => !!it.revoked);
@@ -121,7 +122,7 @@ export async function onRequestGet({ request, env }) {
 /** POST：发布 / 撤回（均需令牌） */
 export async function onRequestPost({ request, env }) {
   try {
-    if (!isAdmin(request, env)) return unauthorized(request);
+    if (!(await isAdmin(request, env))) return unauthorized(request);
     if (!env.NEWS_KV) return fail('服务端未配置 KV 绑定（NEWS_KV）', 500, request);
 
     const body = await readBody(request);

@@ -460,6 +460,13 @@ input, select { font-family: inherit; }
 .form-msg { font-size: 12px; min-height: 18px; margin-top: 6px; }
 .form-msg.ok { color: var(--success); }
 .form-msg.err { color: var(--danger); }
+/* 服务端会话状态行 + 说明小字（令牌免填改造，沿用既有配色变量，不引入新配色） */
+.session-state { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.session-state.ok { color: var(--success); }
+.session-state.err { color: var(--danger); }
+.settings-note { color: var(--text-dim); font-size: 12px; line-height: 1.5; margin: 0; word-break: break-all; }
+/* 复制失败时会回显完整链接，避免小屏（480px）横向溢出 */
+.settings-card .form-msg { word-break: break-all; }
 
 /* ---- 弹窗 ---- */
 .modal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 16px; }
@@ -1343,13 +1350,19 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
         </div>
         <div class="settings-card">
           <h3>推荐机型接口配置</h3>
-          <p class="settings-desc">配置推荐机型管理接口的后端地址与管理令牌（请求头 X-Admin-Token），保存后用于首页实时信息与推荐机型的自动拉取、审核。</p>
+          <p class="settings-desc">配置推荐机型管理接口的后端地址，保存后用于首页实时信息与推荐机型的自动拉取、审核。后台登录后由服务端签发会话（HttpOnly Cookie），令牌通常无需填写。</p>
           <div class="form-stack">
             <input type="text" id="apiBaseInput" class="input" placeholder="后端地址，如 https://henry126923-admincenter.pages.dev">
-            <input type="password" id="apiTokenInput" class="input" placeholder="管理令牌 X-Admin-Token" autocomplete="off">
+            <input type="password" id="apiTokenInput" class="input" placeholder="备用令牌（可选，通常无需填写）" autocomplete="off">
             <div class="settings-row">
-              <button id="saveApiBtn" class="btn btn-primary">保存配置</button>
+              <button id="saveApiBtn" class="btn btn-primary" type="button">保存配置</button>
+              <button id="checkSessionBtn" class="btn btn-ghost" type="button">检测会话</button>
             </div>
+            <div id="adminSessionState" class="session-state">服务端会话：未检测</div>
+            <div class="settings-row">
+              <button id="copyKeyLinkBtn" class="btn btn-ghost" type="button">复制免密入口链接</button>
+            </div>
+            <p class="settings-note">把该链接存为书签，打开即自动登录，无需再填令牌。</p>
             <div id="apiMsg" class="form-msg"></div>
           </div>
         </div>
@@ -1613,6 +1626,8 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       state.session = { username: u.username, role: u.role, loginDate: todayStr(), sessionId: genId() };
       recordSession('后台登录');
       saveSession();
+      // 本地校验通过后追加建立服务端会话（失败不阻塞登录，兼容离线场景）
+      if (u.role === 'owner' || u.role === 'admin') adminLoginServer(u.username, pwd);
       showMain();
       return;
     }
@@ -1639,6 +1654,13 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
 
   function logout() {
     if (typeof clearGate === 'function') clearGate();
+    // 先通知服务端清除会话 Cookie（失败不阻塞本地登出）
+    try {
+      var p = recRequest('/api/admin-logout', { method: 'POST' });
+      if (p && p.catch) p.catch(function () { });
+    } catch (e) { /* 离线或接口不可用：忽略 */ }
+    ADMIN_SESSION_STATE.authenticated = false;
+    ADMIN_SESSION_STATE.username = '';
     clearSession();
     location.reload();
   }
@@ -1656,6 +1678,8 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     renderSites();
     switchPage('dashboard');
     recStartPolling();
+    // 已登录状态：刷新服务端会话状态行（令牌免填改造第 6 条）
+    if (isAdmin()) checkAdminSession();
   }
 
   function renderUserChip() {
@@ -1935,9 +1959,11 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   function recRequest(path, opts) {
     opts = opts || {};
     var headers = { 'Accept': 'application/json' };
-    if (recApiToken()) headers['X-Admin-Token'] = recApiToken();
+    // 备用令牌仅在填写时附加；主用鉴权为服务端会话 Cookie（credentials: same-origin）
+    var spareToken = recApiToken();
+    if (spareToken) headers['X-Admin-Token'] = spareToken;
     if (opts.body) headers['Content-Type'] = 'application/json';
-    var init = { method: opts.method || 'GET', headers: headers };
+    var init = { method: opts.method || 'GET', headers: headers, credentials: 'same-origin' };
     if (opts.body) init.body = JSON.stringify(opts.body);
     if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) init.signal = AbortSignal.timeout(15000);
     return fetch(recApiBase() + path, init).then(function (res) {
@@ -1955,6 +1981,172 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       });
     });
   }
+  // ===== 服务端会话（令牌免填） =====
+  var ADMIN_SESSION_STATE = { loading: false, authenticated: false, username: '', checked: false };
+
+  /** POST /api/admin-login：用用户名 + 密码（或令牌本身）换取服务端会话 Cookie */
+  function postAdminLogin(username, password) {
+    return recRequest('/api/admin-login', {
+      method: 'POST',
+      body: { username: username, password: password }
+    });
+  }
+
+  /** 建立服务端会话（失败不阻塞本地登录 / 本地配置保存） */
+  function adminLoginServer(username, password) {
+    try {
+      return postAdminLogin(username, password).then(function (data) {
+        if (data && data.ok === false) {
+          console.warn('[admin-login] 服务端会话未建立：', data.error || data.code || '');
+          renderAdminSessionState(false);
+          return null;
+        }
+        return checkAdminSession();
+      }).catch(function (err) {
+        console.warn('[admin-login] 服务端会话建立失败：', (err && err.message) ? err.message : err);
+        renderAdminSessionState(false);
+        return null;
+      });
+    } catch (e) {
+      console.warn('[admin-login] 服务端会话建立异常：', e);
+      return null;
+    }
+  }
+
+  /** 用「备用令牌 / 会话令牌」作为密码换取服务端会话（免密入口链接、手动填令牌后调用） */
+  function adminLoginWithToken(token) {
+    var tk = String(token || '').trim();
+    if (!tk) return null;
+    var uname = (state.session && state.session.username) ? state.session.username : 'henry';
+    return adminLoginServer(uname, tk);
+  }
+
+  /** GET /api/admin-session：刷新服务端会话状态行 */
+  function checkAdminSession() {
+    var box = $('adminSessionState');
+    if (!box) return null;
+    ADMIN_SESSION_STATE.loading = true;
+    box.className = 'session-state';
+    box.textContent = '服务端会话：检测中…';
+    try {
+      return recRequest('/api/admin-session').then(function (data) {
+        ADMIN_SESSION_STATE.loading = false;
+        ADMIN_SESSION_STATE.checked = true;
+        ADMIN_SESSION_STATE.authenticated = !!(data && data.authenticated);
+        ADMIN_SESSION_STATE.username = (data && data.username) ? String(data.username) : '';
+        renderAdminSessionState(false);
+        return data;
+      }).catch(function (err) {
+        ADMIN_SESSION_STATE.loading = false;
+        ADMIN_SESSION_STATE.checked = true;
+        ADMIN_SESSION_STATE.authenticated = false;
+        ADMIN_SESSION_STATE.username = '';
+        renderAdminSessionState(true);
+        console.warn('[admin-session] 检测失败：', (err && err.message) ? err.message : err);
+        return null;
+      });
+    } catch (e) {
+      ADMIN_SESSION_STATE.loading = false;
+      ADMIN_SESSION_STATE.checked = true;
+      renderAdminSessionState(true);
+      return null;
+    }
+  }
+
+  /** 渲染状态行：服务端会话：已连接（henry）/ 未连接 */
+  function renderAdminSessionState(isError) {
+    var box = $('adminSessionState');
+    if (!box) return;
+    if (ADMIN_SESSION_STATE.loading) {
+      box.className = 'session-state';
+      box.textContent = '服务端会话：检测中…';
+      return;
+    }
+    if (ADMIN_SESSION_STATE.authenticated) {
+      box.className = 'session-state ok';
+      box.textContent = '服务端会话：已连接' + (ADMIN_SESSION_STATE.username ? '（' + ADMIN_SESSION_STATE.username + '）' : '');
+      return;
+    }
+    box.className = 'session-state err';
+    box.textContent = isError ? '服务端会话：检测失败' : '服务端会话：未连接';
+  }
+
+  /** 页面初始化：URL 含 ?k=<会话令牌> 时用它换取会话，并立即从地址栏移除该参数（保留其他参数） */
+  function consumeUrlSessionKey() {
+    var search = location.search || '';
+    if (search.indexOf('k=') < 0) return;
+    var qs = search.charAt(0) === '?' ? search.slice(1) : search;
+    var parts = qs ? qs.split('&') : [];
+    var key = '';
+    var rest = [];
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      if (!p) continue;
+      if (p.indexOf('k=') === 0) { key = p.slice(2); continue; }
+      rest.push(p);
+    }
+    if (!key) return;
+    // 无论成功失败都先从地址栏移除，避免令牌残留在浏览历史中
+    var clean = location.pathname + (rest.length ? '?' + rest.join('&') : '') + (location.hash || '');
+    try { history.replaceState(null, '', clean); } catch (e) { /* 移除失败不影响会话建立 */ }
+    var raw = key;
+    try { raw = decodeURIComponent(key); } catch (e2) { raw = key; }
+    if (!raw) return;
+    var uname = (state.session && state.session.username) ? state.session.username : 'henry';
+    var chain = adminLoginServer(uname, raw);
+    if (chain && chain.then) {
+      chain.then(function () {
+        // 会话建立后，重新拉取需要管理权限的数据（仅本地已登录的管理员；与主站公开接口无关）
+        if (ADMIN_SESSION_STATE.authenticated && isAdmin()) {
+          loadNews(true);
+          loadRecommendations(true);
+        }
+      });
+    }
+  }
+
+  /** 复制免密入口链接：当前页面地址 + ?k=<当前填写的会话令牌> */
+  function copySessionLink() {
+    var input = $('apiTokenInput');
+    var msg = $('apiMsg');
+    var token = input ? String(input.value || '').trim() : '';
+    if (!token) {
+      if (msg) { msg.className = 'form-msg err'; msg.textContent = '请先在上方填写会话令牌，再复制免密入口链接'; }
+      return;
+    }
+    var link = location.origin + location.pathname + '?k=' + encodeURIComponent(token);
+    function done() { if (msg) { msg.className = 'form-msg ok'; msg.textContent = '免密入口链接已复制：打开即自动登录'; } }
+    function fallback() {
+      if (legacyCopyText(link)) { done(); return; }
+      if (msg) { msg.className = 'form-msg err'; msg.textContent = '复制失败，请手动复制：' + link; }
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(done).catch(fallback);
+        return;
+      }
+    } catch (e) { /* 剪贴板 API 不可用 → 走兜底 */ }
+    fallback();
+  }
+
+  /** 剪贴板兜底：临时 textarea + execCommand('copy') */
+  function legacyCopyText(text) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', 'readonly');
+      ta.style.position = 'fixed';
+      ta.style.top = '-1000px';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return !!ok;
+    } catch (e) { return false; }
+  }
+
   function loadRecommendations(force) {
     var status = $('recStatus');
     if (!status || REC_STATE.loading) return;
@@ -2295,7 +2487,9 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     db.settings.adminToken = token;
     saveDB();
     msg.className = 'form-msg ok';
-    msg.textContent = '配置已保存，正在重新拉取…';
+    msg.textContent = token ? '配置已保存，正在建立服务端会话…' : '配置已保存，正在重新拉取…';
+    // ②(b) 填了会话令牌时，保存后立即用它换取服务端会话并刷新状态行（失败不阻断本地配置）
+    if (token) adminLoginWithToken(token);
     loadRecommendations(true);
     loadNews(true);
     setTimeout(function () {
@@ -2925,7 +3119,24 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     u.password = newP;
     saveDB();
     $('oldPwd').value = ''; $('newPwd').value = '';
+    // 同步服务端密码（失败仅提示，不阻断本地改密）
+    adminPwdSync(u.username, oldP, newP);
     alert('密码已更新');
+  }
+
+  /** POST /api/admin-password：同步服务端密码；失败提示「服务端密码未同步，请检查登录会话」 */
+  function adminPwdSync(username, oldPassword, newPassword) {
+    try {
+      recRequest('/api/admin-password', {
+        method: 'POST',
+        body: { username: username, oldPassword: oldPassword, newPassword: newPassword }
+      }).catch(function (err) {
+        console.warn('[admin-password] 服务端密码未同步：', (err && err.message) ? err.message : err);
+        alert('服务端密码未同步，请检查登录会话');
+      });
+    } catch (e) {
+      console.warn('[admin-password] 服务端密码未同步：', e);
+    }
   }
 
   // ===== 备份 / 恢复 =====
@@ -3238,8 +3449,11 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     var bi = $('apiBaseInput'); if (bi) bi.value = (db.settings.adminApiBase || '');
     var ti = $('apiTokenInput'); if (ti) ti.value = (db.settings.adminToken || '');
     var gi = $('ghPerPageInput'); if (gi) gi.value = ghPerPage();
+    renderAdminSessionState(false);
     updateSessionSummary();
     touchSession(); saveDB();
+    // 打开设置页时刷新服务端会话状态（管理员）
+    if (isAdmin()) checkAdminSession();
   }
 
   // ===== 消息中心 =====
@@ -3594,6 +3808,10 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     });
     $('clearSessionsBtn').addEventListener('click', clearSessionsWithBackup);
     $('saveApiBtn').addEventListener('click', saveApiConfig);
+    var csBtn = $('checkSessionBtn');
+    if (csBtn) csBtn.addEventListener('click', function () { checkAdminSession(); });
+    var ckBtn = $('copyKeyLinkBtn');
+    if (ckBtn) ckBtn.addEventListener('click', copySessionLink);
     document.querySelectorAll('.nav-item').forEach(function (it) {
       it.addEventListener('click', function (e) { e.preventDefault(); switchPage(it.getAttribute('data-page')); });
     });
@@ -3608,6 +3826,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   db = loadDB();
   applyTheme();
   bindEvents();
+  consumeUrlSessionKey();
   initAuth();
 })();
 

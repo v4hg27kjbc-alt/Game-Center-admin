@@ -19,7 +19,7 @@ export async function onRequestOptions({ request }) {
 
 export async function onRequestGet({ request, env }) {
   try {
-    if (!isAdmin(request, env)) return unauthorized(request);
+    if (!(await isAdmin(request, env))) return unauthorized(request);
     if (!env.DB) return fail('服务端未配置 D1 绑定（DB）', 500, request);
 
     const url = new URL(request.url);

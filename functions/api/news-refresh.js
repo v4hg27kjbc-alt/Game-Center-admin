@@ -2,7 +2,8 @@
  * POST /api/news-refresh
  * 手动刷新「今日航空快讯」：管理员在后台点击「立即刷新快讯」时调用。
  * ------------------------------------------------------------------
- * 鉴权：请求头 X-Admin-Token 与环境变量 ADMIN_TOKEN 比对（复用 _utils.isAdmin），
+ * 鉴权：复用 _utils.isAdmin（优先校验服务端会话 Cookie mv_admin；
+ *       会话无效时回退请求头 X-Admin-Token 与环境变量 ADMIN_TOKEN 比对），
  *       未授权返回 401 结构化 JSON；路由路径与既有约定保持不变。
  *
  * 抓取策略（v2 加固）：
@@ -244,7 +245,7 @@ export async function onRequestOptions({ request }) {
 
 export async function onRequestPost({ request, env }) {
   try {
-    if (!isAdmin(request, env)) return unauthorized(request);
+    if (!(await isAdmin(request, env))) return unauthorized(request);
     if (!env.NEWS_KV) return fail('服务端未配置 KV 绑定（NEWS_KV）', 500, request);
 
     // 1) 多源并行抓取：每个源各自超时 + 各自重试，单个源失败不影响其他源

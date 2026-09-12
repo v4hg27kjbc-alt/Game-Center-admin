@@ -353,6 +353,11 @@ input, select { font-family: inherit; }
   -webkit-text-fill-color: transparent;
 }
 .stat-label { color: var(--text-dim); font-size: 12px; margin-top: 4px; }
+.stat-src { color: var(--text-dim); font-size: 11px; margin-top: 6px; opacity: 0.75; line-height: 1.4; word-break: break-all; }
+.stat-group-title { font-size: 13px; color: var(--text-dim); margin: 4px 0 10px; letter-spacing: 0.3px; }
+.scope-picker { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 2px; }
+.scope-picker .chip { flex: 0 0 auto; }
+.gate-err { min-height: 16px; color: var(--danger); font-size: 12px; }
 .chart-card {
   background: var(--card-bg);
   border: 1px solid var(--glass-border);
@@ -1119,6 +1124,30 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
           <div class="stat-card"><div class="stat-num" id="statPending">0</div><div class="stat-label">待处理</div></div>
           <div class="stat-card"><div class="stat-num" id="statBrowse">0</div><div class="stat-label">累计浏览</div></div>
         </div>
+        <!-- 三源统一口径统计：主站推荐提交数 + 后台审核结果数 + GitHub 反馈拉取数 -->
+        <div class="stat-group-title">运营数据总览（主站 / 后台 / GitHub 三源统一口径）</div>
+        <div class="stat-cards" id="statCardsUnified">
+          <div class="stat-card">
+            <div class="stat-num" id="statRecTotal">0</div>
+            <div class="stat-label">主站推荐提交</div>
+            <div class="stat-src">来源：主站 · GET /api/recommendations</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="statRecPending">0</div>
+            <div class="stat-label">待审核</div>
+            <div class="stat-src">来源：后台审核结果</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="statRecReviewed">0 / 0</div>
+            <div class="stat-label">已采纳 / 已驳回</div>
+            <div class="stat-src">来源：后台审核结果</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="statGhCount">0</div>
+            <div class="stat-label">GitHub 反馈</div>
+            <div class="stat-src" id="statGhSrc">来源：api.github.com</div>
+          </div>
+        </div>
         <div class="chart-card">
           <h3>反馈类型分布</h3>
           <div id="typeChart" class="chart"></div>
@@ -1215,12 +1244,24 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
         </div>
       </section>
 
-      <!-- 公告管理 -->
+      <!-- 公告管理（后端 /api/announcements，KV 存储） -->
       <section id="page-notices" class="page hidden">
         <div class="toolbar">
-          <div class="toolbar-title">公告管理</div>
-          <button id="addNoticeBtn" class="btn btn-primary">发布公告</button>
+          <div>
+            <div class="toolbar-title">公告管理</div>
+            <p class="gh-sub">公告由后端接口（GET/POST /api/announcements，KV 存储）统一管理：对外公告会在主站弹窗与常驻板块展示，撤回后主站自动消失；对内公告仅管理员可见。</p>
+          </div>
+          <div class="toolbar-right">
+            <div class="chips" id="annChips">
+              <button class="chip active" data-ann="active">已发布</button>
+              <button class="chip" data-ann="revoked">已撤回</button>
+              <button class="chip" data-ann="all">全部</button>
+            </div>
+            <button id="annRefreshBtn" class="btn btn-ghost">刷新列表</button>
+            <button id="addNoticeBtn" class="btn btn-primary">发布公告</button>
+          </div>
         </div>
+        <div id="annStatus" class="gh-status"></div>
         <div id="noticeList" class="notice-list"></div>
         <p id="noticeEmpty" class="empty hidden">暂无公告</p>
       </section>
@@ -1313,6 +1354,17 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
           </div>
         </div>
         <div class="settings-card">
+          <h3>GitHub 反馈拉取设置</h3>
+          <p class="settings-desc">设置每次从 GitHub 拉取反馈（gamecenter 仓库 Issues）的条数上限，默认 100（GitHub 单页上限），保存到本地配置后立即生效。</p>
+          <div class="form-stack">
+            <input type="number" id="ghPerPageInput" class="input" min="1" max="100" step="1" placeholder="每次拉取条数上限（默认 100）">
+            <div class="settings-row">
+              <button id="saveGhCfgBtn" class="btn btn-primary">保存配置</button>
+            </div>
+            <div id="ghCfgMsg" class="form-msg"></div>
+          </div>
+        </div>
+        <div class="settings-card">
           <h3>访客管理</h3>
           <p class="settings-desc">管理访客一次性动态码与申请状态。</p>
           <div id="visitorAdminList" class="token-list"></div>
@@ -1362,9 +1414,30 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     <form id="noticeForm" class="form-stack">
       <input type="text" id="noticeTitle" class="input" placeholder="公告标题（必填）" maxlength="40">
       <textarea id="noticeContent" class="input" rows="4" placeholder="公告内容（必填）"></textarea>
+      <div class="scope-picker" id="noticeScopeChips">
+        <button type="button" class="chip active" data-scope="public">对外（前端用户可见）</button>
+        <button type="button" class="chip" data-scope="internal">对内（仅管理员可见）</button>
+      </div>
       <div class="modal-actions">
         <button type="button" id="noticeCancel" class="btn btn-ghost">取消</button>
-        <button type="submit" class="btn btn-primary">发布</button>
+        <button type="submit" id="noticeSubmitBtn" class="btn btn-primary">发布</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 敏感面板身份验证弹窗（登录密码） -->
+<div id="gateModal" class="modal hidden">
+  <div class="modal-mask"></div>
+  <div class="modal-card">
+    <h3 id="gateTitle">身份验证</h3>
+    <p class="settings-desc" id="gateDesc">访问敏感面板前需验证身份，请输入当前账号的登录密码。</p>
+    <form id="gateForm" class="form-stack">
+      <input type="password" id="gatePwd" class="input" placeholder="登录密码" autocomplete="current-password">
+      <div class="gate-err" id="gateErr"></div>
+      <div class="modal-actions">
+        <button type="button" id="gateCancel" class="btn btn-ghost">取消</button>
+        <button type="submit" class="btn btn-primary">验证并进入</button>
       </div>
     </form>
   </div>
@@ -1462,7 +1535,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       d = {
         sites: [],
         feedbacks: [],
-        settings: { siteKeys: {}, aiEnabled: true, aiEndpoint: AI_DEFAULT.endpoint, aiApiKey: AI_DEFAULT.apiKey, aiModel: AI_DEFAULT.model },
+        settings: { siteKeys: {}, aiEnabled: true, aiEndpoint: AI_DEFAULT.endpoint, aiApiKey: AI_DEFAULT.apiKey, aiModel: AI_DEFAULT.model, ghPerPage: 100 },
         analytics: { views: {} },
         users: [ { username: 'henry', password: 'wanwan123', role: 'owner', createdAt: nowStr() } ],
         messages: [
@@ -1565,6 +1638,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   }
 
   function logout() {
+    if (typeof clearGate === 'function') clearGate();
     clearSession();
     location.reload();
   }
@@ -1611,6 +1685,8 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   }
 
   function switchPage(name) {
+    // 敏感面板前置身份验证（登录密码）
+    if (typeof requireGate === 'function' && !requireGate(name)) return;
     var pages = ['dashboard', 'feedbacks', 'github-feedbacks', 'notices', 'trash', 'sites', 'settings'];
     for (var i = 0; i < pages.length; i++) {
       $('page-' + pages[i]).classList.toggle('hidden', pages[i] !== name);
@@ -1624,7 +1700,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     if (name === 'dashboard') { loadStats(); renderTrend(); renderRecent(); renderNotes(); refreshLivePanels(); }
     if (name === 'feedbacks') loadFeedbacks();
     if (name === 'github-feedbacks') { loadGitHubIssues(false); switchAggTab(REC_STATE.aggTab); }
-    if (name === 'notices') renderNotices();
+    if (name === 'notices') loadAnnouncements(false);
     if (name === 'trash') renderTrash();
     if (name === 'sites') renderSites();
     if (name === 'settings') renderSettings();
@@ -1690,7 +1766,17 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
 
   // ===== GitHub 反馈（公开 API 拉取 gamecenter Issues） =====
   var GH_REPO = 'v4hg27kjbc-alt/gamecenter';
-  var GH_ISSUES_URL = 'https://api.github.com/repos/' + GH_REPO + '/issues?state=all&sort=created&direction=desc&per_page=50';
+  var GH_PER_PAGE_DEFAULT = 100;
+  /** 每次拉取条数上限（本地配置 db.settings.ghPerPage，默认 100，GitHub 单页上限 100） */
+  function ghPerPage() {
+    var n = parseInt((db.settings && db.settings.ghPerPage), 10);
+    if (!n || isNaN(n) || n < 1) n = GH_PER_PAGE_DEFAULT;
+    if (n > 100) n = 100;
+    return n;
+  }
+  function ghIssuesUrl() {
+    return 'https://api.github.com/repos/' + GH_REPO + '/issues?state=all&sort=created&direction=desc&per_page=' + ghPerPage();
+  }
   var GH_CACHE_KEY = 'gh_issues_cache_v1';
   var GH_LOADING = false;
   function ghFmtTime(iso) {
@@ -1751,7 +1837,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     status.className = 'gh-status';
     status.innerHTML = '<span class="gh-hint">正在从 GitHub 拉取 Issues…</span>';
     if (list) list.innerHTML = '';
-    fetch(GH_ISSUES_URL, {
+    fetch(ghIssuesUrl(), {
       headers: { 'Accept': 'application/vnd.github+json' },
       signal: AbortSignal.timeout(15000)
     }).then(function (res) {
@@ -2083,6 +2169,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     }
     var t = $('liveRecTime');
     if (t) t.textContent = REC_STATE.lastSync ? ('同步于 ' + REC_STATE.lastSync) : '未同步';
+    renderLiveStats();
   }
   function renderLiveGh() {
     var box = $('liveGhList');
@@ -2094,6 +2181,38 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     }, '暂无 GitHub 反馈');
     var t = $('liveGhTime');
     if (t) t.textContent = LIVE_GH.ts ? ('同步于 ' + LIVE_GH.ts) : '未同步';
+    renderLiveStats();
+  }
+  /**
+   * 三源统一口径统计卡：主站推荐提交数 / 后台审核结果数 / GitHub 反馈拉取数。
+   * 推荐数据来自 REC_STATE.items（GET /api/recommendations，含 status 审核结果），
+   * GitHub 数据来自 LIVE_GH.items（api.github.com）。
+   */
+  function renderLiveStats() {
+    var recs = REC_STATE.items || [];
+    var pending = 0, approved = 0, rejected = 0;
+    for (var i = 0; i < recs.length; i++) {
+      var st = recs[i].status || 'pending';
+      if (st === 'approved') approved++;
+      else if (st === 'rejected') rejected++;
+      else pending++;
+    }
+    var elRec = $('statRecTotal');
+    if (elRec) elRec.textContent = recs.length;
+    var elPend = $('statRecPending');
+    if (elPend) elPend.textContent = pending;
+    var elRev = $('statRecReviewed');
+    if (elRev) elRev.textContent = approved + ' / ' + rejected;
+    var ghItems = (LIVE_GH.items || []);
+    var elGh = $('statGhCount');
+    if (elGh) elGh.textContent = ghItems.length;
+    var elGhSrc = $('statGhSrc');
+    if (elGhSrc) {
+      elGhSrc.textContent = '来源：api.github.com · 每次拉取上限 ' + ghPerPage() + ' 条'
+        + (LIVE_GH.ts ? ' · 同步于 ' + LIVE_GH.ts : '');
+    }
+    var elRecSrc = $('statCardsUnified');
+    if (elRecSrc) elRecSrc.setAttribute('data-rec-sync', REC_STATE.lastSync || '');
   }
   function renderLiveNews() {
     var box = $('liveNewsList');
@@ -2126,7 +2245,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     } catch (e) {}
     renderLiveGh();
     if (LIVE_GH.items.length) return;
-    fetch(GH_ISSUES_URL, { headers: { 'Accept': 'application/vnd.github+json' } }).then(function (res) {
+    fetch(ghIssuesUrl(), { headers: { 'Accept': 'application/vnd.github+json' } }).then(function (res) {
       return res.json();
     }).then(function (data) {
       if (!Array.isArray(data)) return;
@@ -2485,32 +2604,98 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     });
   }
 
-  // ===== 公告管理 =====
+  // ===== 公告管理（后端接口 /api/announcements，KV 存储） =====
+  var ANN_STATE = { items: [], filter: 'active', scope: 'public', loading: false, error: '', lastSync: '' };
+
+  function annExtractList(data) {
+    if (Array.isArray(data)) return data;
+    if (data && typeof data === 'object') {
+      var keys = ['announcements', 'items', 'data', 'list'];
+      for (var i = 0; i < keys.length; i++) {
+        if (Array.isArray(data[keys[i]])) return data[keys[i]];
+      }
+    }
+    return [];
+  }
+  function annScopeText(scope) {
+    return (scope === 'internal') ? '对内' : '对外';
+  }
+  /** 拉取公告列表：后台走 scope=admin（需 X-Admin-Token，经 recRequest 统一带头） */
+  function loadAnnouncements(force) {
+    if (ANN_STATE.loading) return Promise.resolve(false);
+    if (isGuest()) return Promise.resolve(false);
+    ANN_STATE.loading = true;
+    var status = $('annStatus');
+    if (status && (force || !ANN_STATE.items.length)) {
+      status.className = 'gh-status';
+      status.innerHTML = '<span class="gh-hint">正在从后端拉取公告列表…</span>';
+    }
+    return recRequest('/api/announcements?scope=admin&status=all').then(function (data) {
+      ANN_STATE.items = annExtractList(data);
+      ANN_STATE.error = '';
+      ANN_STATE.lastSync = nowStr();
+      renderNotices();
+      return true;
+    }).catch(function (err) {
+      ANN_STATE.error = (err && err.message) ? err.message : '未知错误';
+      renderNotices();
+      return false;
+    }).finally(function () { ANN_STATE.loading = false; });
+  }
   function renderNotices() {
     var wrap = $('noticeList');
     if (!wrap) return;
+    var status = $('annStatus');
+    var all = ANN_STATE.items || [];
+    var list = all.filter(function (n) {
+      if (ANN_STATE.filter === 'active') return !n.revoked;
+      if (ANN_STATE.filter === 'revoked') return !!n.revoked;
+      return true;
+    });
+    var chips = document.querySelectorAll('#annChips .chip');
+    var counts = { active: 0, revoked: 0, all: all.length };
+    for (var c = 0; c < all.length; c++) { if (all[c].revoked) counts.revoked++; else counts.active++; }
+    var labels = { active: '已发布', revoked: '已撤回', all: '全部' };
+    for (var i = 0; i < chips.length; i++) {
+      var key = chips[i].getAttribute('data-ann');
+      chips[i].textContent = (labels[key] || key) + '（' + (counts[key] || 0) + '）';
+      chips[i].classList.toggle('active', key === ANN_STATE.filter);
+    }
     wrap.innerHTML = '';
-    if (!db.notices.length) { $('noticeEmpty').classList.remove('hidden'); return; }
+    if (status) {
+      if (ANN_STATE.error) {
+        status.className = 'gh-status';
+        status.innerHTML = '<span class="gh-err">公告接口暂不可用：' + esc(ANN_STATE.error)
+          + '<br>请确认「系统设置 → 推荐机型接口配置」中的后端地址与管理令牌后点击「刷新列表」重试。</span>';
+      } else {
+        status.className = 'gh-status';
+        status.innerHTML = '<span class="gh-hint">共 ' + all.length + ' 条公告（对外 ' + all.filter(function (n) { return n.scope === 'public' && !n.revoked; }).length
+          + ' · 对内 ' + all.filter(function (n) { return n.scope === 'internal' && !n.revoked; }).length
+          + '）· 上次同步 ' + esc(ANN_STATE.lastSync || '—') + '</span>';
+      }
+    }
+    if (!list.length) { $('noticeEmpty').classList.remove('hidden'); return; }
     $('noticeEmpty').classList.add('hidden');
-    db.notices.slice().sort(function (a, b) { return b.createdAt.localeCompare(a.createdAt); }).forEach(function (n) {
+    list.slice().sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); }).forEach(function (n) {
       var card = document.createElement('div'); card.className = 'notice-card';
       var head = document.createElement('div'); head.className = 'notice-head';
       var title = document.createElement('span'); title.className = 'notice-title'; title.textContent = n.title;
-      var tag = document.createElement('span'); tag.className = 'notice-tag'; tag.textContent = n.author;
-      var tm = document.createElement('span'); tm.className = 'notice-time'; tm.textContent = n.createdAt;
+      var tag = document.createElement('span'); tag.className = 'notice-tag';
+      tag.textContent = annScopeText(n.scope) + (n.revoked ? ' · 已撤回' : '');
+      var tm = document.createElement('span'); tm.className = 'notice-time';
+      tm.textContent = (n.createdAt ? recFmtTime(n.createdAt) : '—') + (n.createdBy ? (' · ' + n.createdBy) : '');
       head.appendChild(title); head.appendChild(tag); head.appendChild(tm);
       var content = document.createElement('div'); content.className = 'notice-content'; content.textContent = n.content;
       card.appendChild(head); card.appendChild(content);
-      if (isAdmin()) {
+      if (isAdmin() && !n.revoked) {
         var acts = document.createElement('div'); acts.className = 'notice-actions';
-        var del = document.createElement('button'); del.className = 'btn btn-sm btn-danger'; del.textContent = '删除';
-        del.onclick = function () {
-          if (confirm('确认删除公告「' + n.title + '」？')) {
-            db.notices = db.notices.filter(function (x) { return x.id !== n.id; });
-            saveDB(); renderNotices();
+        var rev = document.createElement('button'); rev.className = 'btn btn-sm btn-danger'; rev.textContent = '撤回';
+        rev.onclick = function () {
+          if (confirm('确认撤回公告「' + n.title + '」？\n\n撤回后主站弹窗与常驻板块将自动消失（对外公告），对内公告将从发布列表移除。')) {
+            revokeAnnouncement(n.id, n.scope);
           }
         };
-        acts.appendChild(del);
+        acts.appendChild(rev);
         card.appendChild(acts);
       }
       wrap.appendChild(card);
@@ -2518,18 +2703,122 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   }
   function openNoticeModal() {
     $('noticeTitle').value = ''; $('noticeContent').value = '';
+    ANN_STATE.scope = 'public';
+    var chips = document.querySelectorAll('#noticeScopeChips .chip');
+    for (var i = 0; i < chips.length; i++) {
+      chips[i].classList.toggle('active', chips[i].getAttribute('data-scope') === 'public');
+    }
     $('noticeModal').classList.remove('hidden');
     $('noticeTitle').focus();
   }
+  /** 发布公告：POST /api/announcements（X-Admin-Token 由 recRequest 统一附加） */
   function addNotice(e) {
     e.preventDefault();
     var title = $('noticeTitle').value.trim();
     var content = $('noticeContent').value.trim();
-    if (!title || !content) { alert('标题和内容都不能为空'); return; }
-    db.notices.push({ id: genId(), title: title, content: content, author: state.session.username, createdAt: nowStr() });
+    var scope = ANN_STATE.scope === 'internal' ? 'internal' : 'public';
+    if (!title || !content) { alert('公告标题和内容都不能为空'); return; }
+    if (scope === 'public') {
+      if (!confirm('确认发布【对外公告】？\n\n标题：' + title + '\n发布后所有访问主站的用户都会在弹窗与常驻板块中看到该公告，撤回前持续展示。')) return;
+    }
+    var btn = $('noticeSubmitBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '发布中…'; }
+    recRequest('/api/announcements', { method: 'POST', body: { title: title, content: content, scope: scope, by: (state.session && state.session.username) || '' } }).then(function () {
+      $('noticeModal').classList.add('hidden');
+      ANN_STATE.filter = 'active';
+      return loadAnnouncements(true).then(function () {
+        alert(scope === 'public' ? '对外公告已发布，主站将自动展示。' : '对内公告已发布，仅管理员可见。');
+      });
+    }).catch(function (err) {
+      alert('发布失败：' + ((err && err.message) ? err.message : '未知错误'));
+    }).finally(function () {
+      if (btn) { btn.disabled = false; btn.textContent = '发布'; }
+    });
+  }
+  /** 撤回公告：POST /api/announcements { action:'revoke', id } */
+  function revokeAnnouncement(id, scope) {
+    recRequest('/api/announcements', { method: 'POST', body: { action: 'revoke', id: id } }).then(function () {
+      return loadAnnouncements(true).then(function () {
+        alert('公告已撤回' + (scope === 'internal' ? '。' : '，主站弹窗与板块将自动消失。'));
+      });
+    }).catch(function (err) {
+      alert('撤回失败：' + ((err && err.message) ? err.message : '未知错误'));
+    });
+  }
+  /** 保存 GitHub 每次拉取条数上限到本地配置 */
+  function saveGhPerPageConfig() {
+    var input = $('ghPerPageInput');
+    var msg = $('ghCfgMsg');
+    var n = parseInt(input ? input.value : '', 10);
+    if (!n || isNaN(n) || n < 1) {
+      msg.className = 'form-msg err';
+      msg.textContent = '请输入 1–100 之间的整数（GitHub 单页上限 100）';
+      return;
+    }
+    if (n > 100) n = 100;
+    db.settings.ghPerPage = n;
     saveDB();
-    $('noticeModal').classList.add('hidden');
-    renderNotices();
+    if (input) input.value = n;
+    msg.className = 'form-msg ok';
+    msg.textContent = '已保存：每次最多拉取 ' + n + ' 条，正在重新拉取…';
+    renderLiveStats();
+    loadGitHubIssues(true);
+    loadLiveGitHub();
+    setTimeout(function () {
+      var m = $('ghCfgMsg');
+      if (m && m.className.indexOf('ok') >= 0) m.textContent = '配置已保存（每次最多 ' + n + ' 条）';
+    }, 2000);
+  }
+
+  // ===== 敏感面板身份验证（登录密码） =====
+  var GATE_KEY = 'aa_gate_ok_v1';
+  var SENSITIVE_PAGES = ['notices', 'trash', 'sites', 'settings'];
+  var gateState = { pending: null, ok: false };
+  function gateSessionKey() {
+    return GATE_KEY + ':' + ((state.session && state.session.sessionId) || 'anon');
+  }
+  function gatePassed() {
+    if (gateState.ok) return true;
+    try { return sessionStorage.getItem(gateSessionKey()) === '1'; } catch (e) { return false; }
+  }
+  function clearGate() {
+    gateState.ok = false;
+    gateState.pending = null;
+    try { sessionStorage.removeItem(gateSessionKey()); } catch (e) {}
+  }
+  /** 敏感面板放行检查：未验证则弹「登录密码」验证框，验证通过后继续进入目标页面 */
+  function requireGate(name) {
+    if (SENSITIVE_PAGES.indexOf(name) < 0) return true;
+    if (gatePassed()) return true;
+    gateState.pending = name;
+    var errEl = $('gateErr');
+    if (errEl) errEl.textContent = '';
+    var t = $('gateTitle'); if (t) t.textContent = '身份验证 · ' + (GATE_PAGE_TITLES[name] || name);
+    var pwd = $('gatePwd'); if (pwd) pwd.value = '';
+    var gm = $('gateModal'); if (gm) gm.classList.remove('hidden');
+    setTimeout(function () { var p = $('gatePwd'); if (p) p.focus(); }, 30);
+    return false;
+  }
+  var GATE_PAGE_TITLES = { dashboard: '数据看板', feedbacks: '反馈管理', 'github-feedbacks': 'GitHub 与推荐', notices: '公告管理', trash: '回收站', sites: '站点管理', settings: '系统设置' };
+  function closeGate() {
+    gateState.pending = null;
+    var gm = $('gateModal'); if (gm) gm.classList.add('hidden');
+  }
+  /** 校验当前登录账号的「登录密码」 */
+  function verifyGate(e) {
+    e.preventDefault();
+    var errEl = $('gateErr');
+    var pwd = $('gatePwd') ? $('gatePwd').value : '';
+    var u = findUser(state.session ? state.session.username : '');
+    if (!u) { if (errEl) errEl.textContent = '未找到当前登录账号，请重新登录'; return; }
+    if (!pwd) { if (errEl) errEl.textContent = '请输入登录密码'; return; }
+    if (pwd !== u.password) { if (errEl) errEl.textContent = '密码错误，请重新输入'; return; }
+    gateState.ok = true;
+    try { sessionStorage.setItem(gateSessionKey(), '1'); } catch (e2) {}
+    var next = gateState.pending;
+    gateState.pending = null;
+    var gm = $('gateModal'); if (gm) gm.classList.add('hidden');
+    if (next) switchPage(next);
   }
 
   // ===== 回收站 =====
@@ -2948,6 +3237,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     renderVisitorAdminList();
     var bi = $('apiBaseInput'); if (bi) bi.value = (db.settings.adminApiBase || '');
     var ti = $('apiTokenInput'); if (ti) ti.value = (db.settings.adminToken || '');
+    var gi = $('ghPerPageInput'); if (gi) gi.value = ghPerPage();
     updateSessionSummary();
     touchSession(); saveDB();
   }
@@ -3243,6 +3533,34 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     $('addNoticeBtn').addEventListener('click', openNoticeModal);
     $('noticeCancel').addEventListener('click', function () { $('noticeModal').classList.add('hidden'); });
     $('noticeForm').addEventListener('submit', addNotice);
+    // 公告范围选择（对外 / 对内）
+    var scopeChips = document.querySelectorAll('#noticeScopeChips .chip');
+    for (var sc = 0; sc < scopeChips.length; sc++) {
+      scopeChips[sc].addEventListener('click', function () {
+        ANN_STATE.scope = this.getAttribute('data-scope') === 'internal' ? 'internal' : 'public';
+        for (var k = 0; k < scopeChips.length; k++) {
+          scopeChips[k].classList.toggle('active', scopeChips[k] === this);
+        }
+      });
+    }
+    // 公告列表筛选 + 刷新
+    var annChips = document.querySelectorAll('#annChips .chip');
+    for (var ac = 0; ac < annChips.length; ac++) {
+      annChips[ac].addEventListener('click', function () {
+        ANN_STATE.filter = this.getAttribute('data-ann') || 'active';
+        renderNotices();
+      });
+    }
+    var annRefresh = $('annRefreshBtn');
+    if (annRefresh) annRefresh.addEventListener('click', function () { loadAnnouncements(true); });
+    // GitHub 拉取条数上限保存
+    var ghSave = $('saveGhCfgBtn');
+    if (ghSave) ghSave.addEventListener('click', saveGhPerPageConfig);
+    // 敏感面板身份验证（登录密码）
+    var gateForm = $('gateForm');
+    if (gateForm) gateForm.addEventListener('submit', verifyGate);
+    var gateCancel = $('gateCancel');
+    if (gateCancel) gateCancel.addEventListener('click', closeGate);
     $('emptyTrashBtn').addEventListener('click', emptyTrash);
     $('addSiteBtn').addEventListener('click', function () { $('siteModal').classList.remove('hidden'); });
     $('modalCancel').addEventListener('click', function () { $('siteModal').classList.add('hidden'); });

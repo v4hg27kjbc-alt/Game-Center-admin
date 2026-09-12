@@ -85,14 +85,13 @@ function pickSummary(block, title) {
   s = decodeEntities(stripTags(decodeEntities(String(s)))).replace(/\s+/g, ' ').trim();
   if (!s) return '';
   const t = String(title || '').replace(/\s+/g, ' ').trim();
-  if (t && s.indexOf(t) === 0) {
-    s = s.slice(t.length).replace(/^[\s\-–—|·:：,，.。]+/, '').trim();
-  }
-  const flat = s.replace(/\s+/g, '');
-  if (!flat) return '';
-  if (flat === t.replace(/\s+/g, '')) return '';
-  // 过短（例如只剩一个来源名）视为无简介，交由「回源补抓」处理
-  if (flat.length < SUMMARY_MIN_LEN) return '';
+  // 与标题高度重合（如 Google News 只给「标题 + 来源名」）→ 无有效简介，交由「回源补抓」处理
+  const nt = t.replace(/[\s\-–—|·:：,，.。]+/g, '');
+  const ns = s.replace(/[\s\-–—|·:：,，.。]+/g, '');
+  if (nt && ns === nt) return '';
+  if (nt && ns.indexOf(nt) === 0 && ns.length - nt.length < 20) return '';
+  if (nt && nt.indexOf(ns) === 0 && nt.length - ns.length < 20) return '';
+  if (ns.length < SUMMARY_MIN_LEN) return '';
   if (s.length > SNIPPET_MAX) s = s.slice(0, SNIPPET_MAX) + '…';
   return s;
 }

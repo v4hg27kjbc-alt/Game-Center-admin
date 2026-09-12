@@ -1,7 +1,8 @@
 /**
  * GET /api/news
  * 返回 KV（绑定名 NEWS_KV）中的每日航空快讯缓存，由独立定时 Worker 写入。
- * 缓存 key：news:latest，值结构：{ updatedAt, date, source, items: [{ title, url, time }] }
+ * 缓存 key：news:latest，值结构：{ updatedAt, date, source, items: [{ title, url, time, snippet }] }
+ * 其中 snippet 为内容简介（由 news-refresh / 定时 Worker 抓取源 description 生成），原样透传给前端。
  *
  * 绑定要求：NEWS_KV（KV）
  */

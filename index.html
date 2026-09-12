@@ -938,6 +938,25 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
 .live-item a.live-title { text-decoration: none; }
 .live-item a.live-title:hover { color: #fff; text-decoration: underline; }
 .live-empty { text-align: center; color: rgba(190,220,255,.45); font-size: 12.5px; padding: 16px 0; }
+
+/* ===== 快讯条目：标题 + 内容简介 + 时间（整条可点开详情） ===== */
+.live-item.news-item {
+  flex-direction: column; align-items: stretch; gap: 4px; cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.live-item.news-item:hover { background: rgba(26,48,86,.62); border-color: rgba(120,180,255,.38); }
+.live-item.news-item .news-row { display: flex; align-items: center; gap: 10px; }
+.live-item.news-item .news-row .live-title { flex: 1; min-width: 0; }
+.live-snippet {
+  margin: 0; font-size: 12px; color: rgba(195,215,245,.72); line-height: 1.6;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; word-break: break-word;
+}
+.live-snippet.empty { color: rgba(190,220,255,.35); }
+.news-detail-body {
+  font-size: 13px; color: #cfd9ea; line-height: 1.85; margin: 4px 0 14px;
+  max-height: 46vh; overflow-y: auto; word-break: break-word; white-space: pre-wrap;
+}
 .live-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .live-head .live-sub { font-size: 12px; color: var(--text-dim); }
 .live-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -1384,6 +1403,20 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
         </div>
       </section>
     </main>
+  </div>
+</div>
+
+<!-- 快讯内容简介详情弹窗 -->
+<div id="newsModal" class="modal hidden">
+  <div class="modal-mask" onclick="closeNewsDetail()"></div>
+  <div class="modal-card">
+    <h3 id="newsModalTitle">快讯详情</h3>
+    <p class="settings-desc" id="newsModalMeta"></p>
+    <div id="newsModalBody" class="news-detail-body"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="closeNewsDetail()">关闭</button>
+      <a id="newsModalLink" class="btn btn-primary" href="#" target="_blank" rel="noopener">阅读原文</a>
+    </div>
   </div>
 </div>
 
@@ -1903,7 +1936,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   var REC_API_DEFAULT = 'https://henry126923-admincenter.pages.dev';
   var REC_POLL_MS = 60000;
   var REC_STATE = { items: [], loading: false, error: '', filter: 'all', lastSync: '', timer: null, aggTab: 'github', review: null };
-  var NEWS_STATE = { items: [], updatedAt: '', error: '', loaded: false };
+  var NEWS_STATE = { items: [], updatedAt: '', source: '', error: '', loaded: false, detailIndex: -1 };
   var LIVE_GH = { items: [], ts: '' };
 
   function recApiBase() {
@@ -2290,6 +2323,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     return recRequest('/api/news').then(function (data) {
       NEWS_STATE.items = recExtractList(data, ['items', 'data', 'list', 'news']);
       NEWS_STATE.updatedAt = (data && (data.updatedAt || data.date)) ? (data.updatedAt || data.date) : '';
+      NEWS_STATE.source = (data && data.source) ? String(data.source) : '';
       NEWS_STATE.error = '';
       NEWS_STATE.loaded = true;
       renderLiveNews();
@@ -2406,24 +2440,90 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     var elRecSrc = $('statCardsUnified');
     if (elRecSrc) elRecSrc.setAttribute('data-rec-sync', REC_STATE.lastSync || '');
   }
+  /** 归一化单条快讯字段：标题 / 内容简介 / 时间 / 原文链接 */
+  function newsField(n, keys) {
+    if (typeof n === 'string') return (keys[0] === 'title') ? n : '';
+    for (var i = 0; i < keys.length; i++) {
+      var v = n ? n[keys[i]] : '';
+      if (v !== undefined && v !== null && String(v).trim() !== '') return String(v);
+    }
+    return '';
+  }
+  function newsTitle(n) { return newsField(n, ['title', 'name', 'text']); }
+  function newsSnippet(n) { return newsField(n, ['snippet', 'summary', 'description', 'desc', 'content']); }
+  function newsTime(n) { return newsField(n, ['time', 'date', 'publishedAt', 'pubDate']); }
+  function newsUrl(n) { return newsField(n, ['url', 'link']); }
+
+  /**
+   * 首页快讯列表：每条展示 标题 + 内容简介（2 行截断）+ 时间，
+   * 整条可点击 → 打开「内容简介详情」弹窗查看完整简介与原文入口。
+   */
   function renderLiveNews() {
     var box = $('liveNewsList');
     if (!box) return;
-    if (NEWS_STATE.error && !NEWS_STATE.items.length) {
+    var items = NEWS_STATE.items || [];
+    if (NEWS_STATE.error && !items.length) {
       box.innerHTML = '<div class="gh-err">快讯接口暂不可用：' + esc(NEWS_STATE.error) + '</div>';
+    } else if (!items.length) {
+      box.innerHTML = '<div class="live-empty">今日暂无航空快讯</div>';
     } else {
-      box.innerHTML = liveRows(NEWS_STATE.items, function (n) {
-        var title = (typeof n === 'string') ? n : (n.title || n.name || n.text || '');
-        var time = (typeof n === 'string') ? '' : (n.time || n.date || n.publishedAt || '');
-        var url = (typeof n === 'string') ? '' : (n.url || n.link || '');
+      var n = Math.min(items.length, 8);
+      var html = '';
+      for (var i = 0; i < n; i++) {
+        var it = items[i];
+        var title = newsTitle(it) || '（无标题）';
+        var snip = newsSnippet(it);
+        var url = newsUrl(it);
         var inner = url
-          ? '<a class="live-title" href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(title) + '</a>'
+          ? '<a class="live-title" href="' + esc(url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation();">' + esc(title) + '</a>'
           : '<span class="live-title">' + esc(title) + '</span>';
-        return '<div class="live-item">' + inner + '<span class="live-time">' + esc(liveFmtTime(time)) + '</span></div>';
-      }, '今日暂无航空快讯');
+        html += '<div class="live-item news-item" data-news-idx="' + i + '" title="点击查看内容简介">'
+          + '<div class="news-row">' + inner + '<span class="live-time">' + esc(liveFmtTime(newsTime(it))) + '</span></div>'
+          + (snip
+            ? '<p class="live-snippet">' + esc(snip) + '</p>'
+            : '<p class="live-snippet empty">暂无内容简介，点击查看详情</p>')
+          + '</div>';
+      }
+      box.innerHTML = html;
+      var rows = box.querySelectorAll('.news-item');
+      for (var k = 0; k < rows.length; k++) {
+        rows[k].addEventListener('click', function () {
+          openNewsDetail(Number(this.getAttribute('data-news-idx')));
+        });
+      }
     }
     var t = $('liveNewsTime');
     if (t) t.textContent = NEWS_STATE.error ? '同步失败' : (NEWS_STATE.updatedAt ? ('更新于 ' + recFmtTime(NEWS_STATE.updatedAt)) : '未同步');
+  }
+
+  /** 打开快讯详情弹窗：完整内容简介 + 来源/时间 + 阅读原文 */
+  function openNewsDetail(idx) {
+    var it = (NEWS_STATE.items || [])[idx];
+    var modal = $('newsModal');
+    if (!it || !modal) return;
+    NEWS_STATE.detailIndex = idx;
+    var snip = newsSnippet(it);
+    var url = newsUrl(it);
+    var time = newsTime(it);
+    $('newsModalTitle').textContent = newsTitle(it) || '快讯详情';
+    $('newsModalMeta').textContent = '来源：' + (NEWS_STATE.source || '航空快讯')
+      + (time ? (' · ' + liveFmtTime(time)) : '')
+      + (NEWS_STATE.updatedAt ? (' · 同步于 ' + recFmtTime(NEWS_STATE.updatedAt)) : '');
+    $('newsModalBody').textContent = snip || '该条快讯未提供内容简介，可点击「阅读原文」查看完整内容。';
+    var link = $('newsModalLink');
+    if (url) {
+      link.href = url;
+      link.style.display = '';
+    } else {
+      link.removeAttribute('href');
+      link.style.display = 'none';
+    }
+    modal.classList.remove('hidden');
+  }
+  function closeNewsDetail() {
+    var modal = $('newsModal');
+    if (modal) modal.classList.add('hidden');
+    NEWS_STATE.detailIndex = -1;
   }
   function loadLiveGitHub() {
     var box = $('liveGhList');

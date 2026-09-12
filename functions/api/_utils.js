@@ -9,6 +9,9 @@
 /** 主站域名（允许跨域访问本接口） */
 export const MAIN_SITE_ORIGIN = 'https://henry126923.pages.dev';
 
+/** 管理后台 / API 自身域名：图片等资源直链使用（跨域引用必须绝对地址，相对路径在主站会 404） */
+export const API_ORIGIN = 'https://henry126923-admincenter.pages.dev';
+
 /** 允许跨域来源白名单 */
 export const ALLOWED_ORIGINS = [
   MAIN_SITE_ORIGIN,
@@ -351,12 +354,20 @@ export function parseDataUrl(dataUrl) {
   }
 }
 
-/** 图片 key → 可访问 URL */
+/**
+ * 图片 key → 可访问的绝对 URL（跨域必需）
+ *   - 已是 http(s) 外链 / dataURL：原样返回
+ *   - 已是 /api/... 形式：补 API_ORIGIN
+ *   - 纯 key（recommend-rec_xxx.jpg）：拼成 API_ORIGIN + /api/image/<key>
+ * 注：历史上返回相对路径 /api/image/<key>，主站域名下不存在该路由（会命中整页 HTML），
+ *     导致上传的照片在主站显示失败，故统一改为绝对地址。
+ */
 export function imageUrlOf(imageKey) {
   const k = str(imageKey, 500);
   if (!k) return '';
-  if (/^https?:\/\//i.test(k)) return k;
-  return '/api/image/' + k;
+  if (/^(https?:)?\/\//i.test(k) || /^data:/i.test(k)) return k;
+  if (/^\/api\//i.test(k)) return API_ORIGIN + k;
+  return API_ORIGIN + '/api/image/' + k.replace(/^\/+/, '');
 }
 
 /** D1 行 → 主站/后台通用字段（camelCase） */

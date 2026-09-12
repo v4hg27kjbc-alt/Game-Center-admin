@@ -11,7 +11,8 @@
  *   2) 每个源带单源超时（SRC_TIMEOUT_MS）+ 独立重试（SOURCE_RETRIES 次，含退避），
  *      避免个别源慢响应把整体请求拖死；
  *   3) 任一源成功 → 合并多个成功源的条目、按 URL/标题去重，写入 KV（绑定名 NEWS_KV，
- *      key = news:latest，结构 { updatedAt, date, source, items: [{ title, url, time }] }），
+ *      key = news:latest，结构 { updatedAt, date, source, items: [{ title, url, time, snippet }] }），
+ *      snippet 为各源 description/summary/content 清洗后的内容简介（后台与主站均据此展示）；
  *      响应保留原有字段 ok/updatedAt/date/source/count/items；
  *   4) 全部源失败 → 不再返回 502，改为读取 KV 中上一次成功的数据兜底返回，
  *      响应带 fallback:true 与逐源失败原因（sources / errors 诊断字段），
@@ -80,7 +81,31 @@ function pick(block, tag) {
   return decodeEntities(stripTags(stripCdata(m[1]))).replace(/\s+/g, ' ').trim();
 }
 
-/** 极简 RSS / Atom 解析：不依赖 DOM，取标题、链接、时间 */
+/** 单条快讯内容简介的最大长度（字符） */
+const SNIPPET_MAX = 300;
+
+/**
+ * 提取单条快讯的「内容简介」：
+ *   依次尝试 description / summary / content:encoded / content，
+ *   统一去标签、解码实体、压缩空白，超长截断。
+ * 说明：历史实现只取 title / link / time，导致后台与主站每条快讯都没有简介可展示，
+ *       此处补齐；取不到时返回空串，由上层按空简介处理。
+ */
+function pickSummary(block, title) {
+  let s = pick(block, 'description')
+    || pick(block, 'summary')
+    || pick(block, 'content:encoded')
+    || pick(block, 'content')
+    || '';
+  s = String(s).replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+  // 简介与标题完全相同时视为无简介（部分源 description 直接复述标题）
+  if (s.replace(/\s+/g, '') === String(title || '').replace(/\s+/g, '')) return '';
+  if (s.length > SNIPPET_MAX) s = s.slice(0, SNIPPET_MAX) + '…';
+  return s;
+}
+
+/** 极简 RSS / Atom 解析：不依赖 DOM，取标题、链接、时间、内容简介 */
 function parseFeed(xml) {
   const items = [];
   const raw = String(xml || '');
@@ -99,7 +124,8 @@ function parseFeed(xml) {
     items.push({
       title: title.slice(0, 160),
       url: link || '',
-      time: time || ''
+      time: time || '',
+      snippet: pickSummary(b, title)
     });
   }
   return items;

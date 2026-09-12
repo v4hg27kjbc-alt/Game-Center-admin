@@ -99,10 +99,100 @@ function pickSummary(block, title) {
     || '';
   s = String(s).replace(/\s+/g, ' ').trim();
   if (!s) return '';
-  // 简介与标题完全相同时视为无简介（部分源 description 直接复述标题）
-  if (s.replace(/\s+/g, '') === String(title || '').replace(/\s+/g, '')) return '';
+  const t = String(title || '').replace(/\s+/g, '');
+  const flat = s.replace(/\s+/g, '');
+  // 简介与标题完全一致 → 视为无简介（部分源 description 直接复述标题）
+  if (flat === t) return '';
+  // 简介以标题开头、剩余部分只是站点名（如 Google News 的「标题 + 来源」）→ 视为无简介
+  if (t && flat.startsWith(t)) {
+    const rest = flat.slice(t.length);
+    if (rest.length < 15) return '';
+  }
   if (s.length > SNIPPET_MAX) s = s.slice(0, SNIPPET_MAX) + '…';
   return s;
+}
+
+/* ============================================================
+   内容简介补抓：RSS 条目自带简介缺失时（如 Google News 只给标题），
+   回源到新闻原文页，读取 og:description / description meta 作为简介。
+   ------------------------------------------------------------
+   注意：Cloudflare Workers 运行时的 TextDecoder 只能可靠解码 UTF-8，
+   因此对声明为 GBK/BIG5 等非 UTF-8 的页面直接跳过，避免产出乱码简介。
+   ============================================================ */
+const SUMMARY_FETCH_LIMIT = 8; // 最多为前 N 条补抓原文简介
+const SUMMARY_FETCH_TIMEOUT_MS = 4500; // 单篇原文抓取超时
+const SUMMARY_CONCURRENCY = 4; // 并发数
+const SUMMARY_MIN_LEN = 15; // 简介最短长度，过短视为无效
+
+/** 从 HTML 头部提取 meta 简介 */
+function extractMetaSummary(htmlText) {
+  const head = String(htmlText || '').slice(0, 200 * 1024);
+  const patterns = [
+    /<meta[^>]+property=["']og:description["'][^>]*content=["']([^"']{10,900})["']/i,
+    /<meta[^>]+content=["']([^"']{10,900})["'][^>]*property=["']og:description["']/i,
+    /<meta[^>]+name=["'](?:description|Description)["'][^>]*content=["']([^"']{10,900})["']/i,
+    /<meta[^>]+content=["']([^"']{10,900})["'][^>]*name=["'](?:description|Description)["']/i,
+    /<meta[^>]+name=["']twitter:description["'][^>]*content=["']([^"']{10,900})["']/i
+  ];
+  for (const re of patterns) {
+    const m = re.exec(head);
+    if (!m || !m[1]) continue;
+    const s = decodeEntities(stripTags(stripCdata(m[1]))).replace(/\s+/g, ' ').trim();
+    if (s.length >= SUMMARY_MIN_LEN) return s.slice(0, SNIPPET_MAX);
+  }
+  return '';
+}
+
+/** 抓取单篇原文页的内容简介；任何异常都静默返回空串 */
+async function fetchArticleSummary(url) {
+  if (!url || !/^https?:\/\//i.test(url)) return '';
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), SUMMARY_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      redirect: 'follow',
+      signal: ctrl.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml'
+      }
+    });
+    if (!res.ok) return '';
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    if (ct && ct.indexOf('html') < 0) return '';
+    const cm = /charset=["']?([\w-]+)/i.exec(ct);
+    // 非 UTF-8 页面（GBK/BIG5 等）无法在 Worker 中可靠解码，跳过以防乱码
+    if (cm && !/^utf-?8$/i.test(cm[1])) return '';
+    const buf = await res.arrayBuffer();
+    const text = new TextDecoder('utf-8').decode(buf.slice(0, 200 * 1024));
+    if (!cm) {
+      const meta = /<meta[^>]+charset=["']?\s*([\w-]+)/i.exec(text.slice(0, 4000));
+      if (meta && !/^utf-?8$/i.test(meta[1])) return '';
+    }
+    return extractMetaSummary(text);
+  } catch (e) {
+    return '';
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** 为缺少简介的条目补抓原文简介（并发受限；失败静默跳过，不影响主流程） */
+async function enrichSummaries(items) {
+  const targets = items.slice(0, SUMMARY_FETCH_LIMIT);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < targets.length) {
+      const it = targets[cursor++];
+      if (!it || it.snippet) continue;
+      const s = await fetchArticleSummary(it.url);
+      if (s) it.snippet = s;
+    }
+  }
+  const workers = [];
+  for (let i = 0; i < SUMMARY_CONCURRENCY; i++) workers.push(worker());
+  await Promise.all(workers);
+  return items;
 }
 
 /** 极简 RSS / Atom 解析：不依赖 DOM，取标题、链接、时间、内容简介 */
@@ -285,8 +375,9 @@ export async function onRequestPost({ request, env }) {
       return fallbackResponse(env, request, results, errors);
     }
 
-    // 3) 合并去重后写入 KV
+    // 3) 合并去重后写入 KV；对缺少简介的条目回源原文补抓（失败静默跳过）
     const items = mergeItems(okList);
+    await enrichSummaries(items);
     const payload = {
       updatedAt: nowIso(),
       date: ymd(),

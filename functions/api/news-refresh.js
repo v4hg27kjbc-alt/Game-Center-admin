@@ -78,7 +78,12 @@ function pick(block, tag) {
   const re = new RegExp('<' + tag + '(?:\\s[^>]*)?>([\\s\\S]*?)<\\/' + tag + '>', 'i');
   const m = re.exec(block);
   if (!m) return '';
-  return decodeEntities(stripTags(stripCdata(m[1]))).replace(/\s+/g, ' ').trim();
+  // 部分源的字段经过 HTML 转义（如 &lt;a href=…&gt;），须先解码再剥标签，反复两次
+  let s = stripCdata(m[1]);
+  for (let i = 0; i < 2; i++) {
+    s = stripTags(decodeEntities(s));
+  }
+  return s.replace(/\s+/g, ' ').trim();
 }
 
 /** 单条快讯内容简介的最大长度（字符） */
@@ -97,17 +102,19 @@ function pickSummary(block, title) {
     || pick(block, 'content:encoded')
     || pick(block, 'content')
     || '';
-  s = String(s).replace(/\s+/g, ' ').trim();
+  // 二次清洗：兜住「转义后再解码」暴露出来的残留标签
+  s = decodeEntities(stripTags(decodeEntities(String(s)))).replace(/\s+/g, ' ').trim();
   if (!s) return '';
-  const t = String(title || '').replace(/\s+/g, '');
-  const flat = s.replace(/\s+/g, '');
-  // 简介与标题完全一致 → 视为无简介（部分源 description 直接复述标题）
-  if (flat === t) return '';
-  // 简介以标题开头、剩余部分只是站点名（如 Google News 的「标题 + 来源」）→ 视为无简介
-  if (t && flat.startsWith(t)) {
-    const rest = flat.slice(t.length);
-    if (rest.length < 15) return '';
+  const t = String(title || '').replace(/\s+/g, ' ').trim();
+  // 简介以标题开头 → 截去标题，剩余部分（多为来源站点名，如 Google News 的「标题+来源」）单独判断
+  if (t && s.indexOf(t) === 0) {
+    s = s.slice(t.length).replace(/^[\s\-–—|·:：,，.。]+/, '').trim();
   }
+  const flat = s.replace(/\s+/g, '');
+  if (!flat) return '';
+  if (flat === t.replace(/\s+/g, '')) return '';
+  // 过短（例如只剩一个来源名）视为无简介，交由「回源补抓」处理
+  if (flat.length < SUMMARY_MIN_LEN) return '';
   if (s.length > SNIPPET_MAX) s = s.slice(0, SNIPPET_MAX) + '…';
   return s;
 }

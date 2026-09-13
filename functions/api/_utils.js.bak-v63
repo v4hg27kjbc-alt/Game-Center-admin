@@ -370,20 +370,6 @@ export function imageUrlOf(imageKey) {
   return API_ORIGIN + '/api/image/' + k.replace(/^\/+/, '');
 }
 
-/** D1 中 specs 以 JSON 字符串存储，统一解析为对象返回（前端据此渲染规格表，避免被逐字符拆解成乱码） */
-export function parseSpecsField(raw) {
-  if (!raw) return {};
-  if (typeof raw === 'object') return Array.isArray(raw) ? {} : raw;
-  const s = String(raw).trim();
-  if (!s) return {};
-  try {
-    const obj = JSON.parse(s);
-    return (obj && typeof obj === 'object' && !Array.isArray(obj)) ? obj : {};
-  } catch (e) {
-    return {};
-  }
-}
-
 /** D1 行 → 主站/后台通用字段（camelCase） */
 export function mapRecommendation(row) {
   if (!row) return null;
@@ -397,7 +383,7 @@ export function mapRecommendation(row) {
     image_key: row.image_key || '',
     image: imageUrlOf(row.image_key),
     descZh: row.descZh || '',
-    specs: parseSpecsField(row.specs),
+    specs: row.specs || '',
     submittedAt: row.submitted_at || '',
     status: row.status || 'pending',
     reply: row.reply || '',

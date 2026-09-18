@@ -426,3 +426,143 @@ export function mapRecommendation(row) {
 export function errText(err, fallback) {
   return (err && err.message) ? err.message : (fallback || '未知错误');
 }
+
+/* ===== v67：反馈联系方式脱敏 + 邮件通知（受理 / 结果两个节点） ===== */
+
+/** 手机号脱敏：138****8888（对已脱敏字符串幂等） */
+export function maskPhone(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return '';
+  const digits = s.replace(/\D/g, '');
+  if (digits.length >= 7) return digits.slice(0, 3) + '****' + digits.slice(-4);
+  if (digits.length >= 2) return digits.charAt(0) + '****' + digits.slice(-1);
+  return '****';
+}
+
+/** 邮箱脱敏：ab***@example.com（对已脱敏字符串幂等） */
+export function maskEmail(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return '';
+  const at = s.indexOf('@');
+  if (at <= 0) return '****';
+  const name = s.slice(0, at);
+  const domain = s.slice(at);
+  if (name.length <= 2) return name.charAt(0) + '***' + domain;
+  return name.slice(0, 2) + '***' + domain;
+}
+
+/** 邮箱基础格式校验（不依赖外部库） */
+export function isEmailLike(v) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v == null ? '' : v).trim());
+}
+
+/** 手机号基础清洗：保留数字与首位 +，其余符号去掉（含空格的国际写法） */
+export function normalizePhone(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return '';
+  return s.replace(/[^\d+]/g, '').slice(0, 20);
+}
+
+/** 邮件服务默认参数（环境变量未配置时的兜底） */
+export const MAIL_DEFAULTS = {
+  endpoint: 'https://api.resend.com/emails',
+  from: '民航客机收藏馆 <onboarding@resend.dev>'
+};
+
+/**
+ * 邮件服务是否可用：
+ *   必填 MAIL_API_KEY（邮件服务 Key）；可选 MAIL_ENABLED=off 全局关闭
+ *   未配置时返回 false → 调用方跳过发信并记录 notify_status = 'skipped_no_key'
+ */
+export function mailConfigured(env) {
+  if (!env || !env.MAIL_API_KEY) return false;
+  const flag = String(env.MAIL_ENABLED || '').trim().toLowerCase();
+  if (flag === 'off' || flag === 'false' || flag === '0') return false;
+  return true;
+}
+
+/**
+ * 发送邮件（HTTP API，兼容 Resend 协议）。永不抛异常，统一返回状态对象：
+ *   { status: 'sent' | 'failed' | 'skipped_no_key' | 'skipped_no_recipient', message, id }
+ * 环境变量：MAIL_API_KEY(必填) / MAIL_API_ENDPOINT(可选) / MAIL_FROM(可选) / MAIL_REPLY_TO(可选)
+ */
+export async function sendMail(env, opts) {
+  const o = opts || {};
+  const to = String(o.to || '').trim();
+  try {
+    if (!to) return { status: 'skipped_no_recipient', message: '收件人为空，已跳过邮件通知', id: '' };
+    if (!mailConfigured(env)) {
+      return { status: 'skipped_no_key', message: '未配置 MAIL_API_KEY，已跳过邮件通知', id: '' };
+    }
+    const endpoint = String(env.MAIL_API_ENDPOINT || MAIL_DEFAULTS.endpoint);
+    const payload = {
+      from: String(env.MAIL_FROM || MAIL_DEFAULTS.from),
+      to: [to],
+      subject: String(o.subject || '民航客机收藏馆 通知'),
+      text: String(o.text || '')
+    };
+    if (o.html) payload.html = String(o.html);
+    if (env.MAIL_REPLY_TO) payload.reply_to = String(env.MAIL_REPLY_TO);
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + String(env.MAIL_API_KEY)
+      },
+      body: JSON.stringify(payload)
+    });
+    const txt = await res.text().catch(() => '');
+    if (!res.ok) {
+      return { status: 'failed', message: 'HTTP ' + res.status + ' ' + String(txt).slice(0, 200), id: '' };
+    }
+    let id = '';
+    try { const j = JSON.parse(txt); id = (j && j.id) ? String(j.id) : ''; } catch (e) { id = ''; }
+    return { status: 'sent', message: '', id };
+  } catch (err) {
+    return { status: 'failed', message: errText(err), id: '' };
+  }
+}
+
+/** 反馈类型白名单 */
+export const FEEDBACK_TYPES = ['功能建议', 'Bug 反馈', '内容纠错', '体验优化', '其他'];
+
+/** 反馈邮件正文（受理 / 结果两个节点） */
+export function feedbackMailContent(stage, row, reply) {
+  const site = '民航客机收藏馆';
+  const type = (row && row.type) || '反馈';
+  const content = (row && row.content) || '';
+  const id = (row && row.id) || '';
+  const who = String((row && row.name) || '').trim();   // v68：有姓名时用于邮件称呼
+  const hi = '你好' + (who ? '（' + who + '）' : '') + '：';
+  if (stage === 'accepted') {
+    return {
+      subject: '【' + site + '】你的反馈已受理',
+      text: hi + '\n\n我们已收到你的反馈，正在处理中。\n\n反馈编号：' + id + '\n反馈类型：' + type + '\n反馈内容：' + content +
+        '\n\n处理完成后我们会再次邮件通知你。感谢你的支持！\n\n—— ' + site,
+      html: '<p>' + escapeHtml(hi) + '</p><p>我们已收到你的反馈，正在处理中。</p>' +
+        '<p><strong>反馈编号：</strong>' + escapeHtml(id) + '<br><strong>反馈类型：</strong>' + escapeHtml(type) +
+        '<br><strong>反馈内容：</strong>' + escapeHtml(content) + '</p>' +
+        '<p>处理完成后我们会再次邮件通知你。感谢你的支持！</p><p>—— ' + site + '</p>'
+    };
+  }
+  const rep = String(reply || '').trim();
+  return {
+    subject: '【' + site + '】你的反馈已处理完成',
+    text: hi + '\n\n你提交的反馈已处理完成。\n\n反馈编号：' + id + '\n反馈类型：' + type + '\n反馈内容：' + content +
+      (rep ? ('\n\n处理回复：' + rep) : '') + '\n\n感谢你的支持！\n\n—— ' + site,
+    html: '<p>' + escapeHtml(hi) + '</p><p>你提交的反馈已处理完成。</p>' +
+      '<p><strong>反馈编号：</strong>' + escapeHtml(id) + '<br><strong>反馈类型：</strong>' + escapeHtml(type) +
+      '<br><strong>反馈内容：</strong>' + escapeHtml(content) + '</p>' +
+      (rep ? ('<p><strong>处理回复：</strong>' + escapeHtml(rep) + '</p>') : '') +
+      '<p>感谢你的支持！</p><p>—— ' + site + '</p>'
+  };
+}
+
+/** HTML 文本转义（邮件模板用） */
+export function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}

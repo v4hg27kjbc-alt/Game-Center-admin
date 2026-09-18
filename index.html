@@ -306,6 +306,9 @@ input, select { font-family: inherit; }
 }
 .badge-new { background: rgba(242, 139, 130, 0.15); color: var(--danger); }
 .badge-done { background: rgba(129, 201, 149, 0.15); color: var(--success); }
+/* v67：反馈联系方式（可联系标注 + 脱敏展示） */
+.fb-contact-line { font-size: 12px; color: var(--text-dim); margin-top: 4px; word-break: break-all; }
+.fb-contact-line:first-of-type { margin-top: 6px; }
 .op-btn {
   border: none;
   background: transparent;
@@ -1235,19 +1238,47 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
             <button class="chip" data-status="new">待处理</button>
             <button class="chip" data-status="done">已处理</button>
           </div>
+          <div class="chips" id="fbViewChips">
+            <button class="chip active" data-view="detail">明细表格</button>
+            <button class="chip" data-view="monthly">月度汇总</button>
+          </div>
           <div class="toolbar-right">
-            <input type="text" id="searchInput" class="input" placeholder="搜索内容 / 类型 / 联系方式">
-            <button id="exportBtn" class="btn btn-ghost">导出 CSV</button>
+            <select id="fbMonthSelect" class="input" title="按月份筛选"><option value="all">全部月份</option></select>
+            <input type="text" id="searchInput" class="input" placeholder="搜索姓名 / 姓氏 / 内容 / 类型 / 手机号 / 邮箱 / 回复">
+            <button id="exportBtn" class="btn btn-ghost">导出明细 CSV</button>
           </div>
         </div>
-        <div class="table-card">
-          <table class="table">
-            <thead>
-              <tr><th>时间</th><th>类型</th><th>内容</th><th>回复</th><th>联系方式</th><th>状态</th><th>操作</th></tr>
-            </thead>
-            <tbody id="feedbackTbody"></tbody>
-          </table>
-          <p id="feedbackEmpty" class="empty hidden">暂无反馈数据</p>
+        <div id="fbDetailBlock">
+          <div class="table-card">
+            <table class="table">
+              <thead>
+                <tr><th>提交时间</th><th>姓名</th><th>姓氏</th><th>手机号(脱敏)</th><th>邮箱(脱敏)</th><th>反馈类型</th><th>反馈内容</th><th>状态</th><th>处理结果 / 回复</th><th>操作</th></tr>
+              </thead>
+              <tbody id="feedbackTbody"></tbody>
+            </table>
+            <p id="feedbackEmpty" class="empty hidden">暂无反馈数据</p>
+          </div>
+        </div>
+
+        <div id="fbMonthlyBlock" class="hidden">
+          <div class="table-card">
+            <div class="panel-head" style="padding:12px 14px 0;">
+              <h3>月度汇总（按自然月聚合）</h3>
+              <span class="panel-sub" id="fbMonthlySummary">—</span>
+            </div>
+            <div class="toolbar" style="padding:6px 14px 0;">
+              <div class="toolbar-right">
+                <button id="fbMonthlyExportBtn" class="btn btn-ghost">导出月度汇总 CSV</button>
+              </div>
+            </div>
+            <table class="table">
+              <thead>
+                <tr><th>月份</th><th>反馈总数</th><th>待处理</th><th>已处理</th><th>已回复</th><th>可联系</th><th>类型分布</th><th>操作</th></tr>
+              </thead>
+              <tbody id="fbMonthlyTbody"></tbody>
+            </table>
+            <p id="fbMonthlyEmpty" class="empty hidden">暂无反馈数据</p>
+          </div>
         </div>
       </section>
 
@@ -1595,6 +1626,8 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     session: null,
     siteId: 'all',
     statusFilter: 'all',
+    monthFilter: 'all',
+    fbView: 'detail',
     search: ''
   };
   var db = null;
@@ -2690,28 +2723,252 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   }
 
   // ===== 反馈 =====
+  /* ===== v67：反馈联系方式（脱敏展示 + 可联系标注） + 自有后台同步 ===== */
+  var FB_REMOTE_STATE = { loaded: false, loading: false, lastTry: 0, error: '' };
+  var FB_TYPE_MAP = {
+    '功能建议': '功能建议', 'Bug 反馈': 'Bug 反馈', '内容纠错': '内容纠错', '体验优化': '体验优化', '其他': '其他'
+  };
+  /** 手机号脱敏：138****8888（非标准号码则保留首字符 + ****） */
+  function maskPhone(v) {
+    var s = String(v || '').trim();
+    if (!s) return '';
+    var digits = s.replace(/\D/g, '');
+    if (digits.length >= 7) return digits.slice(0, 3) + '****' + digits.slice(-4);
+    if (digits.length >= 2) return digits.charAt(0) + '****' + digits.slice(-1);
+    return '****';
+  }
+  /** 邮箱脱敏：ab***@example.com */
+  function maskEmail(v) {
+    var s = String(v || '').trim();
+    if (!s) return '';
+    var at = s.indexOf('@');
+    if (at <= 0) return '****';
+    var name = s.slice(0, at), domain = s.slice(at);
+    if (name.length <= 2) return name.charAt(0) + '***' + domain;
+    return name.slice(0, 2) + '***' + domain;
+  }
+  function fbHasContact(f) { return !!(f && ((f.phone && String(f.phone).trim()) || (f.email && String(f.email).trim()))); }
+
+  /* ===== v68：姓名 / 姓氏自动推导 / 按月聚合 ===== */
+  /** 常见复姓（两字），姓氏推导时优先匹配 */
+  var FB_COMPOUND_SURNAMES = ['欧阳', '太史', '端木', '上官', '司马', '东方', '独孤', '南宫', '万俟', '闻人', '夏侯', '诸葛', '尉迟', '公羊', '赫连', '澹台', '皇甫', '宗政', '濮阳', '公冶', '太叔', '申屠', '公孙', '慕容', '仲孙', '钟离', '长孙', '宇文', '司徒', '鲜于', '司空', '闾丘', '子车', '亓官', '司寇', '巫马', '公西', '颛孙', '壤驷', '公良', '漆雕', '乐正', '宰父', '谷梁', '拓跋', '夹谷', '轩辕', '令狐', '段干', '百里', '呼延', '东郭', '南门', '羊舌', '微生', '公户', '公玉', '公仪', '梁丘', '公仲', '公上', '公门', '公山', '公坚', '左丘', '公伯', '西门', '公祖', '第五', '公乘', '贯丘', '公皙', '南荣', '东里', '东宫', '仲长', '子书', '子桑', '即墨', '达奚', '褚师'];
+  function fbHasCJK(s) { return /[\u4e00-\u9fa5]/.test(String(s || '')); }
+  /** 姓氏自动推导：中文取首字（优先匹配常见复姓）；西文姓名取最后一个词；无法推导则留空 */
+  function fbSurname(name) {
+    var s = String(name || '').replace(/\s+/g, ' ').trim();
+    if (!s) return '';
+    if (fbHasCJK(s)) {
+      var head = s.slice(0, 2);
+      if (head.length === 2 && FB_COMPOUND_SURNAMES.indexOf(head) >= 0) return head;
+      return s.charAt(0);
+    }
+    var parts = s.split(' ');
+    return parts.length >= 2 ? parts[parts.length - 1] : '';
+  }
+  /** 月份键：YYYY-MM（兼容 "YYYY-MM-DD HH:mm" 与 ISO 字符串）；无法解析归入「未知月份」 */
+  function fbMonthKey(v) {
+    var m = String(v || '').match(/(\d{4})[-\/](\d{1,2})/);
+    if (!m) return 'unknown';
+    var mm = parseInt(m[2], 10);
+    if (!(mm >= 1 && mm <= 12)) return 'unknown';
+    return m[1] + '-' + (mm < 10 ? '0' : '') + mm;
+  }
+  function fbMonthLabel(k) {
+    var m = String(k || '').match(/^(\d{4})-(\d{2})$/);
+    return m ? (m[1] + '年' + m[2] + '月') : '未知月份';
+  }
+  function fbMonthSortDesc(a, b) {
+    if (a === 'unknown') return 1;
+    if (b === 'unknown') return -1;
+    return String(b).localeCompare(String(a));
+  }
+  function fbStatusText(f) { return (f && f.status === 'new') ? '待处理' : '已处理'; }
+  /** 明细 CSV 表头（导出明细与月度汇总明细共用，含全部字段） */
+  var FB_CSV_HEAD = ['提交时间', '站点', '姓名', '姓氏', '可联系', '手机号(脱敏)', '邮箱(脱敏)', '反馈类型', '反馈内容', '状态', '处理结果/回复'];
+  function fbCsvRow(f) {
+    var phone = (f.phone || '').trim(), email = (f.email || '').trim();
+    return [f.createdAt || '', getSiteName(f.siteKey), (f.name || '').trim(), fbSurname(f.name),
+      fbHasContact(f) ? '可联系' : '',
+      phone ? maskPhone(phone) : '',
+      email ? maskEmail(email) : '',
+      f.type || '', f.content || '', fbStatusText(f), f.reply || ''];
+  }
+  function fbCsvBuild(rows) {
+    return rows.map(function (r) {
+      return r.map(function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }).join(',');
+    }).join(String.fromCharCode(10));
+  }
+  function fbCsvDownload(rows, fileName) {
+    var csv = fbCsvBuild(rows);
+    var blob = new Blob([String.fromCharCode(0xFEFF) + csv], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  /** 联系方式单元格：填写了手机号/邮箱 → 加「可联系」标注并脱敏展示；未填写 → 整格留空（不显示「无」或占位符） */
+  function fbContactCell(f) {
+    var td = document.createElement('td');
+    var phone = (f && f.phone) ? String(f.phone).trim() : '';
+    var email = (f && f.email) ? String(f.email).trim() : '';
+    if (!phone && !email) {
+      // 兼容 v66 及更早版本写入的通用「联系方式」自由文本
+      var legacy = (f && f.contact) ? String(f.contact).trim() : '';
+      if (legacy) {
+        var lg = document.createElement('div');
+        lg.className = 'fb-contact-line';
+        lg.textContent = legacy;
+        td.appendChild(lg);
+      }
+      return td;
+    }
+    var badge = document.createElement('span');
+    badge.className = 'badge badge-done';
+    badge.textContent = '可联系';
+    td.appendChild(badge);
+    if (phone) {
+      var p = document.createElement('div');
+      p.className = 'fb-contact-line';
+      p.textContent = '手机 ' + maskPhone(phone);
+      td.appendChild(p);
+    }
+    if (email) {
+      var m = document.createElement('div');
+      m.className = 'fb-contact-line';
+      m.textContent = '邮箱 ' + maskEmail(email);
+      td.appendChild(m);
+    }
+    return td;
+  }
+  /** 后台接口返回的反馈记录 → 本地列表结构 */
+  function mapRemoteFeedback(it) {
+    it = it || {};
+    var type = String(it.type || '其他');
+    if (!FB_TYPE_MAP[type]) type = '其他';
+    return {
+      id: String(it.id || ''),
+      siteKey: 'all',
+      type: type,
+      content: String(it.content || ''),
+      reply: String(it.reply || ''),
+      status: (it.status === 'done') ? 'done' : 'new',
+      createdAt: String(it.createdAt || it.created_at || ''),
+      name: String(it.name || ''),
+      phone: String(it.phone || ''),
+      email: String(it.email || ''),
+      notifyStatus: String(it.notifyStatus || it.notify_status || ''),
+      remote: true
+    };
+  }
+  /** 合并服务端记录（按 id 去重更新，不覆盖本地未同步记录） */
+  function mergeRemoteFeedbacks(items) {
+    if (!items || !items.length) return 0;
+    var added = 0;
+    items.forEach(function (it) {
+      var rec = mapRemoteFeedback(it);
+      if (!rec.id) return;
+      var hit = null;
+      for (var i = 0; i < db.feedbacks.length; i++) {
+        if (db.feedbacks[i] && String(db.feedbacks[i].id) === rec.id) { hit = db.feedbacks[i]; break; }
+      }
+      if (hit) {
+        hit.status = rec.status;
+        if (rec.reply) hit.reply = rec.reply;
+        if (rec.name) hit.name = rec.name;
+        if (rec.phone) hit.phone = rec.phone;
+        if (rec.email) hit.email = rec.email;
+        if (!hit.createdAt) hit.createdAt = rec.createdAt;
+        hit.notifyStatus = rec.notifyStatus;
+        hit.remote = true;
+      } else {
+        if (!rec.createdAt) rec.createdAt = nowStr();
+        db.feedbacks.push(rec);
+        added++;
+      }
+    });
+    return added;
+  }
+  /** 拉取 /api/feedback（管理员鉴权）并合并到本地列表；失败仅提示，不阻塞本地数据展示 */
+  function loadRemoteFeedbacks() {
+    if (FB_REMOTE_STATE.loading) return;
+    if (FB_REMOTE_STATE.loaded) return;
+    if (Date.now() - FB_REMOTE_STATE.lastTry < 60000) return;
+    FB_REMOTE_STATE.loading = true;
+    FB_REMOTE_STATE.lastTry = Date.now();
+    recRequest('/api/feedback?limit=200').then(function (data) {
+      var items = recExtractList(data, ['items', 'data', 'list', 'feedbacks']);
+      var added = mergeRemoteFeedbacks(items);
+      FB_REMOTE_STATE.loaded = true;
+      FB_REMOTE_STATE.error = '';
+      FB_REMOTE_STATE.loading = false;
+      saveDB();
+      if (added > 0 || items.length) { loadFeedbacks(); loadStats(); }
+    }).catch(function (err) {
+      FB_REMOTE_STATE.loading = false;
+      FB_REMOTE_STATE.error = (err && err.message) ? err.message : '拉取失败';
+      console.warn('[feedback] 服务端反馈拉取失败：', FB_REMOTE_STATE.error);
+    });
+  }
+  /** 服务端记录标记已处理 / 回复：POST /api/feedback（action=notify，触发结果邮件通知） */
+  function fbRemoteUpdate(f, status, reply) {
+    if (!f || !f.remote || !f.id) return;
+    recRequest('/api/feedback', { method: 'POST', body: { action: 'notify', id: f.id, status: status || 'done', reply: reply || '' } })
+      .then(function (data) {
+        var n = data && data.notify;
+        f.notifyStatus = (n && n.status) ? n.status : (f.notifyStatus || '');
+        saveDB();
+        loadFeedbacks();
+      })
+      .catch(function (err) {
+        alert('服务端同步失败（本地已标记）：' + ((err && err.message) ? err.message : '未知错误'));
+      });
+  }
   function filteredFeedbacks() {
     return db.feedbacks.filter(function (f) {
-      if (state.siteId !== 'all' && f.siteKey !== state.siteId) return false;
+      if (!f.remote && state.siteId !== 'all' && f.siteKey !== state.siteId) return false;
       if (state.statusFilter === 'new' && f.status !== 'new') return false;
       if (state.statusFilter === 'done' && f.status !== 'done') return false;
+      if (state.monthFilter && state.monthFilter !== 'all' && fbMonthKey(f.createdAt) !== state.monthFilter) return false;
       if (state.search) {
         var q = state.search.toLowerCase();
-        var hay = (f.content + ' ' + f.type + ' ' + (f.contact || '') + ' ' + getSiteName(f.siteKey)).toLowerCase();
+        var hay = (f.content + ' ' + f.type + ' ' + (f.name || '') + ' ' + fbSurname(f.name) + ' ' + (f.contact || '') + ' ' + (f.phone || '') + ' ' + (f.email || '') + ' ' + (f.reply || '') + ' ' + fbStatusText(f) + ' ' + getSiteName(f.siteKey)).toLowerCase();
         if (hay.indexOf(q) < 0) return false;
       }
       return true;
-    }).sort(function (a, b) { return b.createdAt.localeCompare(a.createdAt); });
+    }).sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); });
   }
   function loadFeedbacks() {
     var list = filteredFeedbacks();
     var tbody = $('feedbackTbody');
     tbody.innerHTML = '';
+    loadRemoteFeedbacks();
+    fbRefreshMonthSelect();
+    fbApplyView();
     if (!list.length) { $('feedbackEmpty').classList.remove('hidden'); return; }
     $('feedbackEmpty').classList.add('hidden');
     list.forEach(function (f) {
       var tr = document.createElement('tr');
       var t = document.createElement('td'); t.textContent = f.createdAt;
+      // 姓名：未填则整格留空；有联系方式时追加「可联系」标注
+      var nm = document.createElement('td');
+      var nmText = (f.name || '').trim();
+      if (nmText) nm.appendChild(document.createTextNode(nmText));
+      if (fbHasContact(f)) {
+        var cbadge = document.createElement('span');
+        cbadge.className = 'badge badge-done';
+        cbadge.textContent = '可联系';
+        if (nmText) cbadge.style.marginLeft = '6px';
+        nm.appendChild(cbadge);
+      }
+      // 姓氏：由姓名自动推导（中文取首字，兼容常见复姓）；未填姓名则留空
+      var sn = document.createElement('td');
+      sn.textContent = fbSurname(f.name);
+      // 手机号 / 邮箱：填写则脱敏展示，未填写整格留空
+      var ph = document.createElement('td');
+      ph.textContent = (f.phone && String(f.phone).trim()) ? maskPhone(f.phone) : '';
+      var em = document.createElement('td');
+      em.textContent = (f.email && String(f.email).trim()) ? maskEmail(f.email) : '';
       var ty = document.createElement('td');
       var span = document.createElement('span');
       span.className = 'type-tag'; span.textContent = f.type;
@@ -2719,11 +2976,6 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       var c = document.createElement('td');
       c.textContent = (f.siteKey && f.siteKey !== 'all') ? ('[' + getSiteName(f.siteKey) + '] ' + f.content) : f.content;
       c.style.maxWidth = '280px';
-      var r = document.createElement('td');
-      r.textContent = f.reply || '';
-      r.style.maxWidth = '220px';
-      r.style.color = f.reply ? '#7fe3c8' : 'rgba(190,220,255,.35)';
-      var co = document.createElement('td'); co.textContent = f.contact || '-';
       var st = document.createElement('td');
       var stb = document.createElement('span');
       stb.className = 'status-tag ' + (f.status === 'new' ? 'new' : 'done');
@@ -2735,23 +2987,29 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
         if (f.status === 'new') {
           var d1 = document.createElement('button');
           d1.className = 'btn btn-sm btn-primary'; d1.textContent = '标记';
-          d1.onclick = function () { f.status = 'done'; f.doneAt = nowStr(); saveDB(); loadFeedbacks(); loadStats(); };
+          d1.onclick = function () {
+            f.status = 'done'; f.doneAt = nowStr(); saveDB(); loadFeedbacks(); loadStats();
+            fbRemoteUpdate(f, 'done', f.reply || '');   // 服务端记录：同步状态并触发结果邮件通知
+          };
           ops.appendChild(d1);
         }
         var d2 = document.createElement('button');
         d2.className = 'btn btn-sm btn-ghost'; d2.textContent = '回复';
         d2.onclick = function () {
-          var r = prompt('回复内容（保存后对访客可见）：', f.reply || '');
-          if (r !== null) { f.reply = r; f.status = 'done'; f.doneAt = nowStr(); saveDB(); loadFeedbacks(); }
+          var r = prompt('回复内容（保存后对访客可见并邮件通知访客）：', f.reply || '');
+          if (r !== null) {
+            f.reply = r; f.status = 'done'; f.doneAt = nowStr(); saveDB(); loadFeedbacks();
+            fbRemoteUpdate(f, 'done', r);
+          }
         };
         ops.appendChild(d2);
       }
-      if (isOwner()) {
+      if (isOwner() && !f.remote) {
         var d3 = document.createElement('button');
         d3.className = 'btn btn-sm btn-danger'; d3.textContent = '删除';
         d3.onclick = function () {
           if (confirm('确认删除这条反馈？可到回收站恢复。')) {
-            db.trash.push({ id: f.id, siteKey: f.siteKey, type: f.type, content: f.content, contact: f.contact, reply: f.reply || '', createdAt: f.createdAt, deletedAt: nowStr() });
+            db.trash.push({ id: f.id, siteKey: f.siteKey, type: f.type, content: f.content, contact: f.contact, phone: f.phone || '', email: f.email || '', reply: f.reply || '', createdAt: f.createdAt, deletedAt: nowStr() });
             db.feedbacks = db.feedbacks.filter(function (x) { return x.id !== f.id; });
             saveDB(); loadFeedbacks(); loadStats();
           }
@@ -2759,16 +3017,26 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
         ops.appendChild(d3);
       }
       o.appendChild(ops);
-      tr.appendChild(t); tr.appendChild(ty); tr.appendChild(c); tr.appendChild(r); tr.appendChild(co); tr.appendChild(st); tr.appendChild(o);
+      var r = document.createElement('td');
+      r.textContent = f.reply || '';
+      r.style.maxWidth = '220px';
+      r.style.color = f.reply ? '#7fe3c8' : 'rgba(190,220,255,.35)';
+      tr.appendChild(t); tr.appendChild(nm); tr.appendChild(sn); tr.appendChild(ph); tr.appendChild(em);
+      tr.appendChild(ty); tr.appendChild(c); tr.appendChild(st); tr.appendChild(r); tr.appendChild(o);
       tbody.appendChild(tr);
     });
   }
   function exportCsv() {
     var list = filteredFeedbacks();
     if (!list.length) { alert('没有可导出的数据'); return; }
-    var rows = [['时间', '站点', '类型', '内容', '回复', '联系方式', '状态']];
+    var rows = [['时间', '站点', '类型', '内容', '回复', '可联系', '手机号(脱敏)', '邮箱(脱敏)', '状态']];
     list.forEach(function (f) {
-      rows.push([f.createdAt, getSiteName(f.siteKey), f.type, f.content, f.reply || '', f.contact || '', f.status === 'new' ? '待处理' : '已处理']);
+      var phone = (f.phone || '').trim(), email = (f.email || '').trim();
+      rows.push([f.createdAt, getSiteName(f.siteKey), f.type, f.content, f.reply || '',
+        fbHasContact(f) ? '可联系' : '',
+        phone ? maskPhone(phone) : '',
+        email ? maskEmail(email) : '',
+        f.status === 'new' ? '待处理' : '已处理']);
     });
     var csv = rows.map(function (r) {
       return r.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',');
@@ -3223,12 +3491,12 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       var span = document.createElement('span'); span.className = 'type-tag'; span.textContent = f.type;
       ty.appendChild(span);
       var c = document.createElement('td'); c.textContent = f.content; c.style.maxWidth = '300px';
-      var co = document.createElement('td'); co.textContent = f.contact || '-';
+      var co = fbContactCell(f);
       var o = document.createElement('td');
       var ops = document.createElement('div'); ops.className = 'ops';
       var r1 = document.createElement('button'); r1.className = 'btn btn-sm btn-primary'; r1.textContent = '恢复';
       r1.onclick = function () {
-        db.feedbacks.push({ id: f.id, siteKey: f.siteKey, type: f.type, content: f.content, contact: f.contact, reply: f.reply || '', status: 'new', createdAt: f.createdAt });
+        db.feedbacks.push({ id: f.id, siteKey: f.siteKey, type: f.type, content: f.content, contact: f.contact, phone: f.phone || '', email: f.email || '', reply: f.reply || '', status: 'new', createdAt: f.createdAt });
         db.trash = db.trash.filter(function (x) { return x.id !== f.id; });
         saveDB(); renderTrash(); loadStats();
       };

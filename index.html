@@ -880,46 +880,14 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
 
 
 
-/* ===== GitHub 反馈面板 ===== */
-.gh-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
-.gh-status { margin-bottom: 12px; font-size: 12px; color: var(--text-dim); min-height: 18px; }
-.gh-err {
+/* ===== 通用列表辅助样式（反馈 / 推荐机型 / 公告 / 运营选题共用） ===== */
+.sub-note { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.list-status { margin-bottom: 12px; font-size: 12px; color: var(--text-dim); min-height: 18px; }
+.list-err {
   background: rgba(242, 139, 130, 0.1); border: 1px solid rgba(242, 139, 130, 0.35);
   color: #ffd9d5; border-radius: 12px; padding: 12px 14px; font-size: 13px; line-height: 1.7;
 }
-.gh-hint { color: var(--text-dim); }
-.gh-list { display: flex; flex-direction: column; gap: 10px; }
-.gh-item {
-  background: var(--card-bg); border: 1px solid var(--glass-border); border-radius: 14px;
-  padding: 12px 16px; backdrop-filter: blur(12px) saturate(160%);
-  -webkit-backdrop-filter: blur(12px) saturate(160%);
-  transition: border-color 0.2s, background 0.2s;
-}
-.gh-item:hover { border-color: var(--glass-border-hover); background: var(--card-bg-hover); }
-.gh-item-top { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
-.gh-state {
-  flex-shrink: 0; margin-top: 1px; display: inline-flex; align-items: center; gap: 5px;
-  font-size: 11px; font-weight: 600; border-radius: 12px; padding: 2px 9px;
-  text-transform: capitalize; letter-spacing: 0.3px;
-}
-.gh-state.open { background: rgba(129, 201, 149, 0.15); color: var(--success); }
-.gh-state.closed { background: rgba(154, 160, 166, 0.18); color: #b8c0cc; }
-.gh-title {
-  color: var(--text-heading); text-decoration: none; font-weight: 600; font-size: 14px;
-  word-break: break-word; flex: 1; min-width: 180px; line-height: 1.5;
-}
-.gh-title:hover { color: #fff; text-decoration: underline; }
-.gh-num { flex-shrink: 0; color: var(--text-dim); font-size: 12px; }
-.gh-meta { margin-top: 4px; font-size: 12px; color: var(--text-dim); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.gh-label {
-  display: inline-block; font-size: 11px; border-radius: 10px; padding: 1px 8px;
-  background: rgba(59, 130, 246, 0.75); color: #fff;
-}
-.gh-preview {
-  margin-top: 6px; font-size: 12px; color: #c3cbdc; line-height: 1.65;
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
-  word-break: break-word;
-}
+.hint-note { color: var(--text-dim); }
 .nav-item.with-ic { display: flex; align-items: center; gap: 8px; }
 .nav-item.with-ic svg { flex-shrink: 0; }
 .ops-stats { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
@@ -944,8 +912,6 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
 .ai-advice-row b { color: #fff; }
 .ai-advice-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .ai-advice-note { font-size: 11.5px; color: rgba(255,255,255,.45); margin-top: 6px; }
-
-@media (max-width: 720px) { .gh-preview { -webkit-line-clamp: 2; } }
 
 /* ===== 首页实时信息（置顶中央主区，复用卡片视觉语言） ===== */
 .live-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
@@ -1065,6 +1031,53 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   .rec-thumb { width: 100%; height: 150px; flex: 0 0 auto; }
   .content { overflow-x: hidden; }
 }
+
+/* ===== v69：反馈处理进度 / 反馈类型时间趋势（自有后台单一数据口径） ===== */
+.status-tag { display: inline-block; font-size: 11px; padding: 3px 9px; border-radius: 20px; font-weight: 600; white-space: nowrap; }
+.status-tag.new { background: rgba(255,190,90,.14); color: #ffd591; }
+.status-tag.doing { background: rgba(124,179,255,.16); color: #9dc4ff; }
+.status-tag.done { background: rgba(56,220,180,.14); color: #7fe3c8; }
+.recent-item .recent-status.doing { background: rgba(124,179,255,.16); color: #9dc4ff; }
+
+/* 反馈类型时间趋势：按日堆叠柱（与运营选题 / 周报 AI 总结同一份数据） */
+.stack-chart { display: flex; align-items: flex-end; gap: 6px; height: 170px; padding: 10px 4px 0; overflow-x: auto; }
+.stack-col { flex: 1 0 14px; min-width: 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; }
+.stack-bar-wrap { width: 100%; flex: 1; display: flex; flex-direction: column; justify-content: flex-end; }
+.stack-seg { width: 100%; }
+.stack-seg:first-child { border-radius: 4px 4px 0 0; }
+.stack-col:hover .stack-bar-wrap { filter: brightness(1.15); }
+.stack-x { font-size: 10px; color: rgba(190,220,255,.45); white-space: nowrap; }
+.stack-x.hidden-x { visibility: hidden; }
+.stack-empty { text-align: center; color: rgba(190,220,255,.45); font-size: 13px; padding: 30px 0; width: 100%; }
+.type-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.type-legend .lg-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: rgba(215,232,255,.8); }
+.type-legend .lg-dot { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
+.type-legend .lg-num { color: rgba(190,220,255,.55); }
+
+/* 反馈详情弹窗（含处理进度时间线） */
+.fb-detail-card { width: min(680px, 94vw); max-height: 86vh; display: flex; flex-direction: column; }
+.fb-detail-body { overflow-y: auto; margin-top: 12px; }
+.fb-detail-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 12.5px; color: var(--text-dim); margin-bottom: 12px; }
+.fb-detail-block { background: var(--card-bg); border: 1px solid var(--glass-border); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+.fb-detail-label { font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+.fb-detail-content { font-size: 13.5px; color: var(--text); white-space: pre-wrap; word-break: break-word; line-height: 1.6; }
+.fb-detail-reply { border-color: rgba(127,227,200,.35); }
+.fb-timeline { position: relative; padding-left: 20px; }
+.fb-timeline::before { content: ''; position: absolute; left: 5px; top: 6px; bottom: 6px; width: 1px; background: rgba(120,180,255,.25); }
+.fb-tl-item { position: relative; padding: 0 0 12px; }
+.fb-tl-item:last-child { padding-bottom: 0; }
+.fb-tl-dot { position: absolute; left: -19px; top: 4px; width: 9px; height: 9px; border-radius: 50%; background: rgba(124,179,255,.5); }
+.fb-tl-item.new .fb-tl-dot { background: #ffd591; }
+.fb-tl-item.doing .fb-tl-dot { background: #9dc4ff; }
+.fb-tl-item.done .fb-tl-dot { background: #7fe3c8; }
+.fb-tl-title { font-size: 13px; color: var(--text-heading); font-weight: 600; }
+.fb-tl-time { font-size: 11.5px; color: var(--text-dim); margin-left: 8px; font-weight: 400; }
+.fb-tl-note { font-size: 12.5px; color: var(--text-dim); margin-top: 3px; line-height: 1.5; word-break: break-word; }
+
+@media (max-width: 720px) {
+  .stack-chart { gap: 4px; }
+  .fb-detail-meta { flex-direction: column; gap: 4px; }
+}
 </style>
 </head>
 <body>
@@ -1095,7 +1108,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     <nav class="nav">
       <a href="#" class="nav-item active" data-page="dashboard">数据看板</a>
       <a href="#" class="nav-item" data-page="feedbacks" data-role="owner,admin">反馈管理</a>
-      <a href="#" class="nav-item with-ic" data-page="github-feedbacks" data-role="owner,admin"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub 与推荐</a>
+      <a href="#" class="nav-item with-ic" data-page="recommendations" data-role="owner,admin"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.7 5.7 6.3 0.9-4.6 4.4 1.1 6.2L12 17.3 6.5 20.2l1.1-6.2L3 9.6l6.3-0.9L12 3z"/></svg>推荐机型</a>
       <a href="#" class="nav-item" data-page="notices" data-role="owner,admin">公告管理</a>
       <a href="#" class="nav-item" data-page="trash" data-role="owner,admin">回收站</a>
       <a href="#" class="nav-item" data-page="sites" data-role="owner">站点管理</a>
@@ -1121,7 +1134,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     <main class="content">
       <!-- 数据看板 -->
       <section id="page-dashboard" class="page">
-        <!-- 实时信息（中央主区置顶）：最新推荐 / 最新 GitHub 反馈 / 今日航空快讯 -->
+        <!-- 实时信息（中央主区置顶）：最新推荐 / 最新站内反馈 / 今日航空快讯（全部来自自有后台） -->
         <div class="live-grid">
           <div class="chart-card">
             <div class="live-head">
@@ -1132,10 +1145,10 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
           </div>
           <div class="chart-card">
             <div class="live-head">
-              <h3>最新 GitHub 反馈</h3>
-              <span class="live-sub" id="liveGhTime">未同步</span>
+              <h3>最新站内反馈</h3>
+              <span class="live-sub" id="liveFbTime">未同步</span>
             </div>
-            <div id="liveGhList" class="live-list"></div>
+            <div id="liveFbList" class="live-list"></div>
           </div>
           <div class="chart-card">
             <div class="live-head">
@@ -1177,33 +1190,59 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
           <div class="stat-card"><div class="stat-num" id="statPending">0</div><div class="stat-label">待处理</div></div>
           <div class="stat-card"><div class="stat-num" id="statBrowse">0</div><div class="stat-label">累计浏览</div></div>
         </div>
-        <!-- 三源统一口径统计：主站推荐提交数 + 后台审核结果数 + GitHub 反馈拉取数 -->
-        <div class="stat-group-title">运营数据总览（主站 / 后台 / GitHub 三源统一口径）</div>
+        <!-- 运营数据总览：只取「自有后台」单一数据口径（站内反馈 + 用户推荐），不再混合任何第三方来源 -->
+        <div class="stat-group-title">运营数据总览（自有后台单一数据口径：站内反馈 + 用户推荐）</div>
         <div class="stat-cards" id="statCardsUnified">
           <div class="stat-card">
+            <div class="stat-num" id="statFbTotal">0</div>
+            <div class="stat-label">反馈总数</div>
+            <div class="stat-src" id="statFbSrc">来源：自有后台 · GET /api/feedback</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="statFbPending">0</div>
+            <div class="stat-label">待处理</div>
+            <div class="stat-src">进度：new（未受理）</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="statFbDoing">0</div>
+            <div class="stat-label">处理中</div>
+            <div class="stat-src">进度：doing（已受理）</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="statFbDone">0</div>
+            <div class="stat-label">已处理</div>
+            <div class="stat-src" id="statFbReplySrc">进度：done · 其中已回复 0 条</div>
+          </div>
+          <div class="stat-card">
             <div class="stat-num" id="statRecTotal">0</div>
-            <div class="stat-label">主站推荐提交</div>
-            <div class="stat-src">来源：主站 · GET /api/recommendations</div>
+            <div class="stat-label">推荐机型提交</div>
+            <div class="stat-src">来源：自有后台 · GET /api/recommendations</div>
           </div>
           <div class="stat-card">
             <div class="stat-num" id="statRecPending">0</div>
-            <div class="stat-label">待审核</div>
-            <div class="stat-src">来源：后台审核结果</div>
+            <div class="stat-label">推荐待审核</div>
+            <div class="stat-src">来源：自有后台审核结果</div>
           </div>
           <div class="stat-card">
             <div class="stat-num" id="statRecReviewed">0 / 0</div>
             <div class="stat-label">已采纳 / 已驳回</div>
-            <div class="stat-src">来源：后台审核结果</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-num" id="statGhCount">0</div>
-            <div class="stat-label">GitHub 反馈</div>
-            <div class="stat-src" id="statGhSrc">来源：api.github.com</div>
+            <div class="stat-src">来源：自有后台审核结果</div>
           </div>
         </div>
         <div class="chart-card">
-          <h3>反馈类型分布</h3>
+          <div class="panel-head">
+            <h3>反馈类型分布（占比）</h3>
+            <span class="panel-sub" id="typeDistSub">数据来源：站内自营后台反馈全量</span>
+          </div>
           <div id="typeChart" class="chart"></div>
+        </div>
+        <div class="chart-card">
+          <div class="panel-head">
+            <h3>反馈类型趋势（近 30 天）</h3>
+            <span class="panel-sub" id="typeTrendSub">按日堆叠 · 与运营选题 / 周报 AI 总结同源</span>
+          </div>
+          <div id="typeTrendLegend" class="type-legend"></div>
+          <div id="typeTrendChart" class="stack-chart"></div>
         </div>
         <div class="dash-grid">
           <div class="panel">
@@ -1221,10 +1260,10 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
             <div id="noteList" class="note-list"></div>
           </div>
         </div>
-        <div class="panel">
+        <div class="chart-card">
           <div class="panel-head">
-            <h3>最新反馈</h3>
-            <span class="panel-sub">最近 5 条</span>
+            <h3>最新反馈与处理进度</h3>
+            <span class="panel-sub">最近 5 条 · 进度口径：待处理 → 处理中 → 已处理</span>
           </div>
           <div id="recentList" class="recent-list"></div>
         </div>
@@ -1236,6 +1275,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
           <div class="chips" id="statusChips">
             <button class="chip active" data-status="all">全部</button>
             <button class="chip" data-status="new">待处理</button>
+            <button class="chip" data-status="doing">处理中</button>
             <button class="chip" data-status="done">已处理</button>
           </div>
           <div class="chips" id="fbViewChips">
@@ -1283,47 +1323,26 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       </section>
 
 
-      <!-- 数据聚合：GitHub 反馈 + 推荐机型（独立栏目，子 Tab 切换） -->
-      <section id="page-github-feedbacks" class="page hidden">
+      <!-- 推荐机型（用户提交，数据来自自有后台 /api/recommendations，不依赖任何第三方平台） -->
+      <section id="page-recommendations" class="page hidden">
         <div class="toolbar">
-          <div class="chips" id="aggChips">
-            <button class="chip active" data-agg="github">GitHub 反馈</button>
-            <button class="chip" data-agg="recommend">推荐机型</button>
+          <div>
+            <div class="toolbar-title">推荐机型（用户提交）</div>
+            <p class="sub-note">从自营后台接口拉取用户推荐的机型，可【采纳】或【驳回】并填写反馈；进入页面自动拉取，之后每 60 秒轮询刷新</p>
+          </div>
+          <div class="toolbar-right">
+            <div class="chips" id="recChips">
+              <button class="chip active" data-rec="all">全部</button>
+              <button class="chip" data-rec="pending">待审核</button>
+              <button class="chip" data-rec="approved">已采纳</button>
+              <button class="chip" data-rec="rejected">已驳回</button>
+            </div>
+            <button id="recAiAuditAllBtn" class="btn btn-ghost">AI 批量预审</button>
+            <button id="recRefreshBtn" class="btn btn-primary">刷新列表</button>
           </div>
         </div>
-
-        <div id="aggGithub">
-          <div class="toolbar">
-            <div>
-              <div class="toolbar-title">GitHub 反馈</div>
-              <p class="gh-sub">自动拉取主站 gamecenter 仓库 GitHub Issues，查看访客提交的公开反馈</p>
-            </div>
-            <button id="ghRefreshBtn" class="btn btn-primary">刷新列表</button>
-          </div>
-          <div id="ghStatus" class="gh-status"></div>
-          <div id="ghList" class="gh-list"></div>
-        </div>
-
-        <div id="aggRecommend" class="hidden">
-          <div class="toolbar">
-            <div>
-              <div class="toolbar-title">推荐机型（用户提交）</div>
-              <p class="gh-sub">从管理端接口拉取用户推荐的机型，可【采纳】或【驳回】并填写反馈；进入页面自动拉取，之后每 60 秒轮询刷新</p>
-            </div>
-            <div class="toolbar-right">
-              <div class="chips" id="recChips">
-                <button class="chip active" data-rec="all">全部</button>
-                <button class="chip" data-rec="pending">待审核</button>
-                <button class="chip" data-rec="approved">已采纳</button>
-                <button class="chip" data-rec="rejected">已驳回</button>
-              </div>
-              <button id="recAiAuditAllBtn" class="btn btn-ghost">AI 批量预审</button>
-              <button id="recRefreshBtn" class="btn btn-primary">刷新列表</button>
-            </div>
-          </div>
-          <div id="recStatus" class="gh-status"></div>
-          <div id="recList" class="rec-list"></div>
-        </div>
+        <div id="recStatus" class="list-status"></div>
+        <div id="recList" class="rec-list"></div>
       </section>
 
       <!-- 运营选题（后端 /api/ops-topics，数据来自主站检索与问答日志） -->
@@ -1331,7 +1350,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
         <div class="toolbar">
           <div>
             <div class="toolbar-title">运营选题 · 未满足需求榜</div>
-            <p class="gh-sub">数据来自主站「自然语言找飞机」与「问 AI」的真实访问日志：左侧是用户想找、库里还没有的机型（可直接变成运营选题），右侧是 AI 答不上来的问题（指导补库）。</p>
+            <p class="sub-note">数据来自主站「自然语言找飞机」与「问 AI」的真实访问日志：左侧是用户想找、库里还没有的机型（可直接变成运营选题），右侧是 AI 答不上来的问题（指导补库）。</p>
           </div>
           <div class="toolbar-right">
             <div class="chips" id="opsDaysChips">
@@ -1342,7 +1361,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
             <button id="opsRefreshBtn" class="btn btn-primary">刷新榜单</button>
           </div>
         </div>
-        <div id="opsStatus" class="gh-status"></div>
+        <div id="opsStatus" class="list-status"></div>
         <div id="opsStats" class="ops-stats"></div>
         <div class="ops-grid">
           <div class="ops-col">
@@ -1361,7 +1380,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
         <div class="toolbar">
           <div>
             <div class="toolbar-title">公告管理</div>
-            <p class="gh-sub">公告由后端接口（GET/POST /api/announcements，KV 存储）统一管理：对外公告会在主站弹窗与常驻板块展示，撤回后主站自动消失；对内公告仅管理员可见。</p>
+            <p class="sub-note">公告由后端接口（GET/POST /api/announcements，KV 存储）统一管理：对外公告会在主站弹窗与常驻板块展示，撤回后主站自动消失；对内公告仅管理员可见。</p>
           </div>
           <div class="toolbar-right">
             <div class="chips" id="annChips">
@@ -1373,7 +1392,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
             <button id="addNoticeBtn" class="btn btn-primary">发布公告</button>
           </div>
         </div>
-        <div id="annStatus" class="gh-status"></div>
+        <div id="annStatus" class="list-status"></div>
         <div id="noticeList" class="notice-list"></div>
         <p id="noticeEmpty" class="empty hidden">暂无公告</p>
       </section>
@@ -1472,17 +1491,6 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
           </div>
         </div>
         <div class="settings-card">
-          <h3>GitHub 反馈拉取设置</h3>
-          <p class="settings-desc">设置每次从 GitHub 拉取反馈（gamecenter 仓库 Issues）的条数上限，默认 100（GitHub 单页上限），保存到本地配置后立即生效。</p>
-          <div class="form-stack">
-            <input type="number" id="ghPerPageInput" class="input" min="1" max="100" step="1" placeholder="每次拉取条数上限（默认 100）">
-            <div class="settings-row">
-              <button id="saveGhCfgBtn" class="btn btn-primary">保存配置</button>
-            </div>
-            <div id="ghCfgMsg" class="form-msg"></div>
-          </div>
-        </div>
-        <div class="settings-card">
           <h3>访客管理</h3>
           <p class="settings-desc">管理访客一次性动态码与申请状态。</p>
           <div id="visitorAdminList" class="token-list"></div>
@@ -1519,6 +1527,18 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
         <button type="submit" id="recSubmitBtn" class="btn btn-primary">提交反馈</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- 反馈详情弹窗（含处理进度时间线，口径与主站「我的反馈记录」一致） -->
+<div id="fbDetailModal" class="modal hidden">
+  <div class="modal-mask" id="fbDetailMask"></div>
+  <div class="modal-card fb-detail-card">
+    <div class="modal-head">
+      <h3 id="fbDetailTitle">反馈详情</h3>
+      <button type="button" id="fbDetailClose" class="btn btn-ghost">关闭</button>
+    </div>
+    <div id="fbDetailBody" class="fb-detail-body"></div>
   </div>
 </div>
 
@@ -1669,7 +1689,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       d = {
         sites: [],
         feedbacks: [],
-        settings: { siteKeys: {}, aiEnabled: true, aiEndpoint: AI_DEFAULT.endpoint, aiApiKey: AI_DEFAULT.apiKey, aiModel: AI_DEFAULT.model, ghPerPage: 100 },
+        settings: { siteKeys: {}, aiEnabled: true, aiEndpoint: AI_DEFAULT.endpoint, aiApiKey: AI_DEFAULT.apiKey, aiModel: AI_DEFAULT.model },
         analytics: { views: {} },
         users: [ { username: 'henry', password: 'wanwan123', role: 'owner', createdAt: nowStr() } ],
         messages: [
@@ -1832,7 +1852,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   function switchPage(name) {
     // 敏感面板前置身份验证（登录密码）
     if (typeof requireGate === 'function' && !requireGate(name)) return;
-    var pages = ['dashboard', 'feedbacks', 'github-feedbacks', 'ops', 'notices', 'trash', 'sites', 'settings'];
+    var pages = ['dashboard', 'feedbacks', 'recommendations', 'ops', 'notices', 'trash', 'sites', 'settings'];
     for (var i = 0; i < pages.length; i++) {
       $('page-' + pages[i]).classList.toggle('hidden', pages[i] !== name);
     }
@@ -1840,11 +1860,11 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     for (var j = 0; j < navs.length; j++) {
       navs[j].classList.toggle('active', navs[j].getAttribute('data-page') === name);
     }
-    var titles = { dashboard: '数据看板', feedbacks: '反馈管理', 'github-feedbacks': 'GitHub 与推荐', ops: '运营选题', notices: '公告管理', trash: '回收站', sites: '站点管理', settings: '系统设置' };
+    var titles = { dashboard: '数据看板', feedbacks: '反馈管理', recommendations: '推荐机型', ops: '运营选题', notices: '公告管理', trash: '回收站', sites: '站点管理', settings: '系统设置' };
     $('pageTitle').textContent = titles[name] || '';
     if (name === 'dashboard') { loadStats(); renderTrend(); renderRecent(); renderNotes(); refreshLivePanels(); }
     if (name === 'feedbacks') loadFeedbacks();
-    if (name === 'github-feedbacks') { loadGitHubIssues(false); switchAggTab(REC_STATE.aggTab); }
+    if (name === 'recommendations') loadRecommendations(false);
     if (name === 'ops') loadOpsTopics();
     if (name === 'notices') loadAnnouncements(false);
     if (name === 'trash') renderTrash();
@@ -1910,123 +1930,24 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   }
 
 
-  // ===== GitHub 反馈（公开 API 拉取 gamecenter Issues） =====
-  var GH_REPO = 'v4hg27kjbc-alt/gamecenter';
-  var GH_PER_PAGE_DEFAULT = 100;
-  /** 每次拉取条数上限（本地配置 db.settings.ghPerPage，默认 100，GitHub 单页上限 100） */
-  function ghPerPage() {
-    var n = parseInt((db.settings && db.settings.ghPerPage), 10);
-    if (!n || isNaN(n) || n < 1) n = GH_PER_PAGE_DEFAULT;
-    if (n > 100) n = 100;
-    return n;
-  }
-  function ghIssuesUrl() {
-    return 'https://api.github.com/repos/' + GH_REPO + '/issues?state=all&sort=created&direction=desc&per_page=' + ghPerPage();
-  }
-  var GH_CACHE_KEY = 'gh_issues_cache_v1';
-  var GH_LOADING = false;
-  function ghFmtTime(iso) {
+  // ===== 通用时间格式化（反馈列表 / 实时面板共用） =====
+  function isoFmtTime(iso) {
     if (!iso) return '';
     var d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
     function p(n) { return (n < 10 ? '0' : '') + n; }
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
-  function ghPreview(body) {
-    var t = String(body || '').replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
-    if (!t) return '(无正文内容)';
-    return t.length > 300 ? t.slice(0, 300) + '…' : t;
-  }
-  function renderGitHubIssues(items, fromCache) {
-    var list = $('ghList');
-    var status = $('ghStatus');
-    if (!items.length) {
-      list.innerHTML = '';
-      status.innerHTML = '';
-      list.innerHTML = '<p class="empty">仓库暂无 Issues</p>';
-      return;
-    }
-    var html = '';
-    for (var i = 0; i < items.length; i++) {
-      var it = items[i];
-      var st = (it.state === 'closed') ? 'closed' : 'open';
-      var labels = '';
-      if (it.labels && it.labels.length) {
-        labels = it.labels.map(function (l) { return '<span class="gh-label">' + esc(l.name || '') + '</span>'; }).join('');
-      }
-      var who = (it.user && it.user.login) ? esc(it.user.login) : 'unknown';
-      html += '<div class="gh-item">'
-        + '<div class="gh-item-top"><span class="gh-state ' + st + '">' + st + '</span>'
-        + '<a class="gh-title" href="' + esc(it.html_url) + '" target="_blank" rel="noopener">' + esc(it.title || '(无标题)') + '</a>'
-        + '<span class="gh-num">#' + it.number + '</span></div>'
-        + '<div class="gh-meta">' + labels + '<span>by ' + who + '</span><span>·</span><span>' + ghFmtTime(it.created_at) + '</span></div>'
-        + '<div class="gh-preview">' + esc(ghPreview(it.body)) + '</div>'
-        + '</div>';
-    }
-    list.innerHTML = html;
-    var tip = (fromCache ? '（缓存，60 秒内不重复请求）' : '');
-    status.innerHTML = '共 ' + items.length + ' 条 Issue' + tip + ' · 来源 api.github.com/repos/' + esc(GH_REPO);
-  }
-  function loadGitHubIssues(force) {
-    if (GH_LOADING) return;
-    var status = $('ghStatus');
-    if (!status) return;
-    var list = $('ghList');
-    var now = Date.now();
-    try {
-      var cached = JSON.parse(sessionStorage.getItem(GH_CACHE_KEY));
-      if (cached && cached.items && Array.isArray(cached.items) && !force && (now - cached.ts) < 60000) {
-        renderGitHubIssues(cached.items, true);
-        return;
-      }
-    } catch (e) {}
-    GH_LOADING = true;
-    status.className = 'gh-status';
-    status.innerHTML = '<span class="gh-hint">正在从 GitHub 拉取 Issues…</span>';
-    if (list) list.innerHTML = '';
-    fetch(ghIssuesUrl(), {
-      headers: { 'Accept': 'application/vnd.github+json' },
-      signal: AbortSignal.timeout(15000)
-    }).then(function (res) {
-      if (res.status === 403 || res.status === 429) {
-        throw new Error('limit');
-      }
-      if (res.status === 404) {
-        throw new Error('notfound');
-      }
-      if (!res.ok) {
-        throw new Error('http_' + res.status);
-      }
-      return res.json();
-    }).then(function (data) {
-      if (!Array.isArray(data)) throw new Error('bad');
-      var issues = data.filter(function (it) { return !it.pull_request; });
-      try { sessionStorage.setItem(GH_CACHE_KEY, JSON.stringify({ ts: Date.now(), items: issues })); } catch (e) {}
-      renderGitHubIssues(issues, false);
-    }).catch(function (err) {
-      var listEl = $('ghList'); if (listEl) listEl.innerHTML = '';
-      var msg = '网络请求失败或超时，请检查网络后点击「刷新列表」重试。';
-      if (err && err.message === 'limit') {
-        msg = 'GitHub API 限流：未认证请求限制为 60 次/小时，当前额度已用尽。请稍后（通常 1 小时后恢复）再点击「刷新列表」重试。';
-      } else if (err && err.message === 'notfound') {
-        msg = '仓库 ' + GH_REPO + ' 不存在或无权访问，请检查 GH_REPO 配置。';
-      } else if (err && err.message === 'bad') {
-        msg = 'GitHub 返回数据格式异常，请稍后重试。';
-      } else if (err && err.message === 'http_403') {
-        msg = '访问被拒绝（403）。';
-      }
-      var stEl = $('ghStatus');
-      if (stEl) stEl.innerHTML = '<div class="gh-err">拉取失败：' + msg + '</div>';
-    }).finally(function () {
-      GH_LOADING = false;
-    });
-  }
+  // ===== 自营后台数据拉取（不依赖任何第三方平台） =====
+  // ===== 实时面板数据源（自营后台接口） =====
+
 
   // ===== 推荐机型（管理端接口：/api/recommendations、/api/review、/api/news） =====
   var REC_API_DEFAULT = 'https://henry126923-admincenter.pages.dev';
   var REC_POLL_MS = 60000;
-  var REC_STATE = { items: [], loading: false, error: '', filter: 'all', lastSync: '', timer: null, aggTab: 'github', review: null };
+  var REC_STATE = { items: [], loading: false, error: '', filter: 'all', lastSync: '', timer: null, review: null };
   var NEWS_STATE = { items: [], updatedAt: '', source: '', error: '', loaded: false, detailIndex: -1 };
-  var LIVE_GH = { items: [], ts: '' };
+  var LIVE_FB = { items: [], ts: '' };
 
   function recApiBase() {
     var b = (db && db.settings && db.settings.adminApiBase) ? String(db.settings.adminApiBase) : '';
@@ -2274,8 +2195,8 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     if (!status || REC_STATE.loading) return;
     if (isGuest()) return;
     if (!REC_STATE.items.length || force) {
-      status.className = 'gh-status';
-      status.innerHTML = '<span class="gh-hint">正在从管理端接口拉取推荐机型…</span>';
+      status.className = 'list-status';
+      status.innerHTML = '<span class="hint-note">正在从管理端接口拉取推荐机型…</span>';
     }
     REC_STATE.loading = true;
     recRequest('/api/recommendations').then(function (data) {
@@ -2315,15 +2236,15 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       chips[c].classList.toggle('active', key === REC_STATE.filter);
     }
     if (REC_STATE.error) {
-      list.innerHTML = '<div class="gh-err">拉取失败：' + esc(REC_STATE.error)
+      list.innerHTML = '<div class="list-err">拉取失败：' + esc(REC_STATE.error)
         + '<br>请确认「系统设置 → 推荐机型接口配置」中的后端地址与管理令牌，然后点击「刷新列表」重试。</div>';
-      status.className = 'gh-status';
-      status.innerHTML = '<span class="gh-hint">同步异常' + (REC_STATE.lastSync ? '（上次成功：' + esc(REC_STATE.lastSync) + '）' : '') + '</span>';
+      status.className = 'list-status';
+      status.innerHTML = '<span class="hint-note">同步异常' + (REC_STATE.lastSync ? '（上次成功：' + esc(REC_STATE.lastSync) + '）' : '') + '</span>';
       return;
     }
     var shown = filteredRecommendations();
-    status.className = 'gh-status';
-    status.innerHTML = '<span class="gh-hint">共 ' + all.length + ' 条推荐，当前筛选 ' + shown.length + ' 条 · 上次同步 ' + esc(REC_STATE.lastSync || '—') + ' · 每 60 秒自动刷新</span>';
+    status.className = 'list-status';
+    status.innerHTML = '<span class="hint-note">共 ' + all.length + ' 条推荐，当前筛选 ' + shown.length + ' 条 · 上次同步 ' + esc(REC_STATE.lastSync || '—') + ' · 每 60 秒自动刷新</span>';
     if (!shown.length) {
       list.innerHTML = '<p class="empty">暂无推荐机型记录</p>';
       return;
@@ -2456,11 +2377,15 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       btn.textContent = '立即刷新快讯';
     });
   }
+  /** 统一时间展示：ISO 字符串 → YYYY-MM-DD HH:mm（各实时面板共用，不再依赖任何外部格式化函数） */
   function liveFmtTime(t) {
     if (!t) return '';
     var s = String(t);
-    if (s.indexOf('T') > 0) return ghFmtTime(s);
-    return s;
+    if (s.indexOf('T') < 0) return s;
+    var d = new Date(s);
+    if (isNaN(d.getTime())) return s;
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
   function liveRows(items, mapFn, emptyText) {
     if (!items || !items.length) return '<div class="live-empty">' + esc(emptyText) + '</div>';
@@ -2476,7 +2401,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       return String(b.submittedAt || '').localeCompare(String(a.submittedAt || ''));
     });
     if (REC_STATE.error && !recs.length) {
-      box.innerHTML = '<div class="gh-err">接口暂不可用：' + esc(REC_STATE.error) + '</div>';
+      box.innerHTML = '<div class="list-err">接口暂不可用：' + esc(REC_STATE.error) + '</div>';
     } else {
       box.innerHTML = liveRows(recs, function (r) {
         return '<div class="live-item"><span class="live-tag">' + recStatusText(r.status || 'pending') + '</span>'
@@ -2488,22 +2413,24 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     if (t) t.textContent = REC_STATE.lastSync ? ('同步于 ' + REC_STATE.lastSync) : '未同步';
     renderLiveStats();
   }
-  function renderLiveGh() {
-    var box = $('liveGhList');
+  /** 数据看板 · 最新站内反馈（数据来源：自营后台 GET /api/feedback） */
+  function renderLiveFb() {
+    var box = $('liveFbList');
     if (!box) return;
-    box.innerHTML = liveRows(LIVE_GH.items, function (it) {
-      return '<div class="live-item"><span class="live-tag">' + ((it.state === 'closed') ? '已关闭' : '进行中') + '</span>'
-        + '<span class="live-title">' + esc(it.title || '(无标题)') + '</span>'
-        + '<span class="live-time">' + esc(ghFmtTime(it.created_at)) + '</span></div>';
-    }, '暂无 GitHub 反馈');
-    var t = $('liveGhTime');
-    if (t) t.textContent = LIVE_GH.ts ? ('同步于 ' + LIVE_GH.ts) : '未同步';
+    var items = LIVE_FB.items || [];
+    box.innerHTML = liveRows(items, function (it) {
+      return '<div class="live-item"><span class="live-tag">' + esc(fbStatusText(it)) + '</span>'
+        + '<span class="live-title">' + esc(it.content || '（无内容）') + '</span>'
+        + '<span class="live-time">' + esc(isoFmtTime(it.createdAt)) + '</span></div>';
+    }, '暂无站内反馈');
+    var t = $('liveFbTime');
+    if (t) t.textContent = LIVE_FB.ts ? ('同步于 ' + LIVE_FB.ts) : '未同步';
     renderLiveStats();
   }
   /**
-   * 三源统一口径统计卡：主站推荐提交数 / 后台审核结果数 / GitHub 反馈拉取数。
-   * 推荐数据来自 REC_STATE.items（GET /api/recommendations，含 status 审核结果），
-   * GitHub 数据来自 LIVE_GH.items（api.github.com）。
+   * 运营数据总览统计卡：统一取自「自有后台」单一数据口径 ——
+   * 站内反馈来自 db.feedbacks（GET /api/feedback 合并本地留底），推荐机型来自 REC_STATE.items。
+   * 全部为自营后台单一数据口径，不引用任何第三方平台数据源。
    */
   function renderLiveStats() {
     var recs = REC_STATE.items || [];
@@ -2520,16 +2447,25 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     if (elPend) elPend.textContent = pending;
     var elRev = $('statRecReviewed');
     if (elRev) elRev.textContent = approved + ' / ' + rejected;
-    var ghItems = (LIVE_GH.items || []);
-    var elGh = $('statGhCount');
-    if (elGh) elGh.textContent = ghItems.length;
-    var elGhSrc = $('statGhSrc');
-    if (elGhSrc) {
-      elGhSrc.textContent = '来源：api.github.com · 每次拉取上限 ' + ghPerPage() + ' 条'
-        + (LIVE_GH.ts ? ' · 同步于 ' + LIVE_GH.ts : '');
-    }
-    var elRecSrc = $('statCardsUnified');
-    if (elRecSrc) elRecSrc.setAttribute('data-rec-sync', REC_STATE.lastSync || '');
+
+    var list = db.feedbacks || [];
+    var fbNew = 0, fbDoing = 0, fbDone = 0, fbReplied = 0;
+    list.forEach(function (f) {
+      var k = fbStatusKey(f);
+      if (k === 'new') fbNew++;
+      else if (k === 'doing') fbDoing++;
+      else fbDone++;
+      if ((f.reply || '').trim()) fbReplied++;
+    });
+    var setTxt = function (id, v) { var el = $(id); if (el) el.textContent = v; };
+    setTxt('statFbTotal', list.length);
+    setTxt('statFbPending', fbNew);
+    setTxt('statFbDoing', fbDoing);
+    setTxt('statFbDone', fbDone);
+    var src = $('statFbSrc');
+    if (src) src.textContent = '来源：自有后台 · GET /api/feedback' + (LIVE_FB.ts ? (' · 同步于 ' + LIVE_FB.ts) : '（含本地留底）');
+    var rsrc = $('statFbReplySrc');
+    if (rsrc) rsrc.textContent = '进度：done · 其中已回复 ' + fbReplied + ' 条';
   }
   /** 归一化单条快讯字段：标题 / 内容简介 / 时间 / 原文链接 */
   function newsField(n, keys) {
@@ -2554,7 +2490,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     if (!box) return;
     var items = NEWS_STATE.items || [];
     if (NEWS_STATE.error && !items.length) {
-      box.innerHTML = '<div class="gh-err">快讯接口暂不可用：' + esc(NEWS_STATE.error) + '</div>';
+      box.innerHTML = '<div class="list-err">快讯接口暂不可用：' + esc(NEWS_STATE.error) + '</div>';
     } else if (!items.length) {
       box.innerHTML = '<div class="live-empty">今日暂无航空快讯</div>';
     } else {
@@ -2616,53 +2552,25 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     if (modal) modal.classList.add('hidden');
     NEWS_STATE.detailIndex = -1;
   }
-  function loadLiveGitHub() {
-    var box = $('liveGhList');
-    if (!box) return;
-    try {
-      var cached = JSON.parse(sessionStorage.getItem(GH_CACHE_KEY));
-      if (cached && Array.isArray(cached.items) && cached.items.length) {
-        LIVE_GH.items = cached.items;
-        LIVE_GH.ts = ghFmtTime(new Date(cached.ts).toISOString());
-      }
-    } catch (e) {}
-    renderLiveGh();
-    if (LIVE_GH.items.length) return;
-    fetch(ghIssuesUrl(), { headers: { 'Accept': 'application/vnd.github+json' } }).then(function (res) {
-      return res.json();
-    }).then(function (data) {
-      if (!Array.isArray(data)) return;
-      LIVE_GH.items = data.filter(function (it) { return !it.pull_request; });
-      LIVE_GH.ts = nowStr();
-      renderLiveGh();
-    }).catch(function () {
-      if (!LIVE_GH.items.length) {
-        var b = $('liveGhList');
-        if (b) b.innerHTML = '<div class="gh-err">GitHub 接口暂不可用，可稍后在「GitHub 与推荐」栏目重试。</div>';
-      }
-    });
-  }
-  function switchAggTab(tab) {
-    REC_STATE.aggTab = (tab === 'recommend') ? 'recommend' : 'github';
-    var chips = document.querySelectorAll('#aggChips .chip');
-    for (var i = 0; i < chips.length; i++) {
-      chips[i].classList.toggle('active', chips[i].getAttribute('data-agg') === REC_STATE.aggTab);
-    }
-    $('aggGithub').classList.toggle('hidden', REC_STATE.aggTab !== 'github');
-    $('aggRecommend').classList.toggle('hidden', REC_STATE.aggTab !== 'recommend');
-    if (REC_STATE.aggTab === 'recommend') loadRecommendations(false);
+  /** 数据看板 · 最新站内反馈（单一数据口径：db.feedbacks，即自营后台 GET /api/feedback 合并本地留底） */
+  function loadLiveFb() {
+    var list = (db.feedbacks || []).slice();
+    list.sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); });
+    LIVE_FB.items = list.slice(0, 5);
+    LIVE_FB.ts = nowStr();
+    renderLiveFb();
   }
   function refreshLivePanels() {
     loadRecommendations(false);
     loadNews(false);
-    loadLiveGitHub();
+    loadLiveFb();
   }
   function recStartPolling() {
     if (REC_STATE.timer) return;
     REC_STATE.timer = setInterval(function () {
       if ($('mainPage').classList.contains('hidden') || isGuest()) return;
       loadRecommendations(false);
-      if (REC_STATE.aggTab === 'recommend') renderRecommendations();
+      renderRecommendations();
     }, REC_POLL_MS);
   }
   function saveApiConfig() {
@@ -2782,7 +2690,19 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     if (b === 'unknown') return -1;
     return String(b).localeCompare(String(a));
   }
-  function fbStatusText(f) { return (f && f.status === 'new') ? '待处理' : '已处理'; }
+  /* ===== v69：处理进度流转（待处理 → 处理中 → 已处理），与主站「我的反馈记录」口径一致 ===== */
+  /** 进度状态键：new=待处理 / doing=处理中 / done=已处理（兼容历史数据，未识别值归为 new） */
+  function fbStatusKey(f) {
+    var s = (f && f.status) ? String(f.status) : 'new';
+    if (s === 'doing' || s === 'inprogress' || s === 'progress') return 'doing';
+    if (s === 'done' || s === 'replied' || s === 'closed') return 'done';
+    return 'new';
+  }
+  function fbStatusText(f) {
+    var k = fbStatusKey(f);
+    return k === 'done' ? '已处理' : (k === 'doing' ? '处理中' : '待处理');
+  }
+  function fbStatusClass(f) { return fbStatusKey(f); }
   /** 明细 CSV 表头（导出明细与月度汇总明细共用，含全部字段） */
   var FB_CSV_HEAD = ['提交时间', '站点', '姓名', '姓氏', '可联系', '手机号(脱敏)', '邮箱(脱敏)', '反馈类型', '反馈内容', '状态', '处理结果/回复'];
   function fbCsvRow(f) {
@@ -2852,7 +2772,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       type: type,
       content: String(it.content || ''),
       reply: String(it.reply || ''),
-      status: (it.status === 'done') ? 'done' : 'new',
+      status: (it.status === 'done' || it.status === 'replied') ? 'done' : ((it.status === 'doing' || it.status === 'inprogress') ? 'doing' : 'new'),
       createdAt: String(it.createdAt || it.created_at || ''),
       name: String(it.name || ''),
       phone: String(it.phone || ''),
@@ -2903,7 +2823,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       FB_REMOTE_STATE.error = '';
       FB_REMOTE_STATE.loading = false;
       saveDB();
-      if (added > 0 || items.length) { loadFeedbacks(); loadStats(); }
+      if (added > 0 || items.length) { loadFeedbacks(); loadStats(); loadLiveFb(); }
     }).catch(function (err) {
       FB_REMOTE_STATE.loading = false;
       FB_REMOTE_STATE.error = (err && err.message) ? err.message : '拉取失败';
@@ -2927,8 +2847,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   function filteredFeedbacks() {
     return db.feedbacks.filter(function (f) {
       if (!f.remote && state.siteId !== 'all' && f.siteKey !== state.siteId) return false;
-      if (state.statusFilter === 'new' && f.status !== 'new') return false;
-      if (state.statusFilter === 'done' && f.status !== 'done') return false;
+      if (state.statusFilter && state.statusFilter !== 'all' && fbStatusKey(f) !== state.statusFilter) return false;
       if (state.monthFilter && state.monthFilter !== 'all' && fbMonthKey(f.createdAt) !== state.monthFilter) return false;
       if (state.search) {
         var q = state.search.toLowerCase();
@@ -2937,6 +2856,152 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       }
       return true;
     }).sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); });
+  }
+  /* ===== v69：反馈详情弹窗（处理进度时间线，口径与主站「我的反馈记录」一致） ===== */
+  function fbOpenDetail(f) {
+    var modal = $('fbDetailModal'), body = $('fbDetailBody');
+    if (!modal || !body || !f) return;
+    var k = fbStatusKey(f);
+    var html = [];
+    html.push('<div class="fb-detail-meta">'
+      + '<span>提交时间：' + esc(f.createdAt || '—') + '</span>'
+      + '<span>站点：' + esc(getSiteName(f.siteKey)) + '</span>'
+      + '<span>类型：' + esc(f.type || '—') + '</span>'
+      + '<span>进度：' + esc(fbStatusText(f)) + '</span>'
+      + '<span>数据源：' + (f.remote ? '自营后台' : '本地留底') + '</span>'
+      + '</div>');
+    var meta2 = [];
+    if ((f.name || '').trim()) meta2.push('<span>姓名：' + esc(f.name) + '（姓氏：' + esc(fbSurname(f.name)) + '）</span>');
+    if (fbHasContact(f)) {
+      if ((f.phone || '').trim()) meta2.push('<span>手机号：' + esc(maskPhone(f.phone)) + '</span>');
+      if ((f.email || '').trim()) meta2.push('<span>邮箱：' + esc(maskEmail(f.email)) + '</span>');
+    }
+    if (meta2.length) html.push('<div class="fb-detail-meta">' + meta2.join('') + '</div>');
+    html.push('<div class="fb-detail-block"><div class="fb-detail-label">反馈内容</div><div class="fb-detail-content">' + esc(f.content || '（无内容）') + '</div></div>');
+    if ((f.reply || '').trim()) {
+      html.push('<div class="fb-detail-block fb-detail-reply"><div class="fb-detail-label">站长回复</div><div class="fb-detail-content">' + esc(f.reply) + '</div></div>');
+    }
+    var tl = [];
+    tl.push('<div class="fb-tl-item new"><span class="fb-tl-dot"></span><div class="fb-tl-title">已提交<span class="fb-tl-time">' + esc(f.createdAt || '') + '</span></div><div class="fb-tl-note">反馈已提交至站内自营后台，等待处理</div></div>');
+    if (k === 'doing' || k === 'done') {
+      tl.push('<div class="fb-tl-item doing"><span class="fb-tl-dot"></span><div class="fb-tl-title">处理中<span class="fb-tl-time">' + esc(f.doingAt || '') + '</span></div><div class="fb-tl-note">站长已开始跟进这条反馈</div></div>');
+    }
+    if (k === 'done') {
+      tl.push('<div class="fb-tl-item done"><span class="fb-tl-dot"></span><div class="fb-tl-title">已处理<span class="fb-tl-time">' + esc(f.doneAt || '') + '</span></div><div class="fb-tl-note">' + ((f.reply || '').trim() ? '站长已给出回复，可在主站「我的反馈记录」查看' : '已处理完成（本次未填写回复）') + '</div></div>');
+    }
+    html.push('<div class="fb-detail-block"><div class="fb-detail-label">处理进度</div><div class="fb-timeline">' + tl.join('') + '</div></div>');
+    body.innerHTML = html.join('');
+    modal.classList.remove('hidden');
+  }
+  function fbCloseDetail() {
+    var modal = $('fbDetailModal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  /* ===== v69：反馈管理视图（明细表格 / 月度汇总）与月份筛选 ===== */
+  /** 按当前数据刷新「月份」下拉选项（保留已选月份；无数据的月份自动移除） */
+  function fbRefreshMonthSelect() {
+    var sel = $('fbMonthSelect');
+    if (!sel) return;
+    var seen = {}, months = [];
+    (db.feedbacks || []).forEach(function (f) {
+      var k = fbMonthKey(f.createdAt);
+      if (!seen[k]) { seen[k] = 1; months.push(k); }
+    });
+    months.sort(fbMonthSortDesc);
+    var cur = (state.monthFilter && seen[state.monthFilter]) ? state.monthFilter : 'all';
+    state.monthFilter = cur;
+    var html = '<option value="all">全部月份</option>';
+    months.forEach(function (k) {
+      html += '<option value="' + k + '">' + fbMonthLabel(k) + '</option>';
+    });
+    sel.innerHTML = html;
+    sel.value = cur;
+  }
+  /** 切换「明细表格 / 月度汇总」视图（口径与明细一致：同源 db.feedbacks + 当前筛选条件） */
+  function fbApplyView() {
+    var view = (state.fbView === 'monthly') ? 'monthly' : 'detail';
+    var d = $('fbDetailBlock'), m = $('fbMonthlyBlock');
+    if (d) d.classList.toggle('hidden', view !== 'detail');
+    if (m) m.classList.toggle('hidden', view !== 'monthly');
+    var chips = document.querySelectorAll('#fbViewChips .chip');
+    for (var i = 0; i < chips.length; i++) {
+      chips[i].classList.toggle('active', (chips[i].getAttribute('data-view') || 'detail') === view);
+    }
+    if (view === 'monthly') renderFbMonthly();
+  }
+  /** 月度汇总：按自然月聚合（反馈总数 / 待处理 / 已处理 / 已回复 / 可联系 / 类型分布） */
+  function fbMonthlyRows() {
+    var map = {};
+    filteredFeedbacks().forEach(function (f) {
+      var k = fbMonthKey(f.createdAt);
+      if (!map[k]) map[k] = { month: k, total: 0, pending: 0, done: 0, replied: 0, contact: 0, types: {}, list: [] };
+      var g = map[k];
+      g.total++;
+      g.list.push(f);
+      var sk = fbStatusKey(f);
+      if (sk === 'done') g.done++; else g.pending++;
+      if ((f.reply || '').trim()) g.replied++;
+      if (fbHasContact(f)) g.contact++;
+      var ty = f.type || '其他';
+      g.types[ty] = (g.types[ty] || 0) + 1;
+    });
+    var rows = [];
+    for (var k in map) rows.push(map[k]);
+    rows.sort(function (a, b) { return fbMonthSortDesc(a.month, b.month); });
+    return rows;
+  }
+  function fbTypeBrief(types) {
+    var arr = [];
+    for (var t in types) arr.push({ t: t, n: types[t] });
+    arr.sort(function (a, b) { return b.n - a.n || String(a.t).localeCompare(String(b.t)); });
+    return arr.map(function (x) { return x.t + ' ' + x.n; }).join(' / ') || '—';
+  }
+  function renderFbMonthly() {
+    var tbody = $('fbMonthlyTbody'), empty = $('fbMonthlyEmpty'), sum = $('fbMonthlySummary');
+    if (!tbody) return;
+    var rows = fbMonthlyRows();
+    tbody.innerHTML = '';
+    if (sum) {
+      var tot = 0, pend = 0, done = 0;
+      rows.forEach(function (g) { tot += g.total; pend += g.pending; done += g.done; });
+      sum.textContent = '共 ' + rows.length + ' 个月 · 反馈 ' + tot + ' 条（待处理 ' + pend + ' / 已处理 ' + done + '）';
+    }
+    if (!rows.length) { if (empty) empty.classList.remove('hidden'); return; }
+    if (empty) empty.classList.add('hidden');
+    rows.forEach(function (g) {
+      var tr = document.createElement('tr');
+      function cell(text) { var td = document.createElement('td'); td.textContent = text; return td; }
+      tr.appendChild(cell(fbMonthLabel(g.month)));
+      tr.appendChild(cell(String(g.total)));
+      tr.appendChild(cell(String(g.pending)));
+      tr.appendChild(cell(String(g.done)));
+      tr.appendChild(cell(String(g.replied)));
+      tr.appendChild(cell(String(g.contact)));
+      tr.appendChild(cell(fbTypeBrief(g.types)));
+      var o = document.createElement('td');
+      var btn = document.createElement('button');
+      btn.className = 'btn btn-sm btn-ghost'; btn.textContent = '导出本月明细';
+      btn.onclick = function () {
+        var rowsCsv = [FB_CSV_HEAD];
+        g.list.forEach(function (f) { rowsCsv.push(fbCsvRow(f)); });
+        fbCsvDownload(rowsCsv, 'feedbacks_' + g.month + '.csv');
+      };
+      o.appendChild(btn);
+      tr.appendChild(o);
+      tbody.appendChild(tr);
+    });
+  }
+  function exportMonthlyCsv() {
+    var rows = fbMonthlyRows();
+    if (!rows.length) { alert('没有可导出的数据'); return; }
+    var out = [['月份', '反馈总数', '待处理', '处理中', '已处理', '已回复', '可联系', '类型分布']];
+    rows.forEach(function (g) {
+      var doing = 0;
+      g.list.forEach(function (f) { if (fbStatusKey(f) === 'doing') doing++; });
+      out.push([fbMonthLabel(g.month), g.total, g.pending - doing, doing, g.done, g.replied, g.contact, fbTypeBrief(g.types)]);
+    });
+    fbCsvDownload(out, 'feedbacks_monthly_' + todayStr() + '.csv');
   }
   function loadFeedbacks() {
     var list = filteredFeedbacks();
@@ -2978,31 +3043,47 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       c.style.maxWidth = '280px';
       var st = document.createElement('td');
       var stb = document.createElement('span');
-      stb.className = 'status-tag ' + (f.status === 'new' ? 'new' : 'done');
-      stb.textContent = f.status === 'new' ? '待处理' : '已处理';
+      stb.className = 'status-tag ' + fbStatusClass(f);
+      stb.textContent = fbStatusText(f);
       st.appendChild(stb);
       var o = document.createElement('td');
       var ops = document.createElement('div'); ops.className = 'ops';
+      var dView = document.createElement('button');
+      dView.className = 'btn btn-sm btn-ghost'; dView.textContent = '详情';
+      dView.onclick = function () { fbOpenDetail(f); };
+      ops.appendChild(dView);
       if (isAdmin()) {
-        if (f.status === 'new') {
+        var skey = fbStatusKey(f);
+        if (skey === 'new') {
           var d1 = document.createElement('button');
-          d1.className = 'btn btn-sm btn-primary'; d1.textContent = '标记';
+          d1.className = 'btn btn-sm btn-primary'; d1.textContent = '开始处理';
           d1.onclick = function () {
-            f.status = 'done'; f.doneAt = nowStr(); saveDB(); loadFeedbacks(); loadStats();
-            fbRemoteUpdate(f, 'done', f.reply || '');   // 服务端记录：同步状态并触发结果邮件通知
+            f.status = 'doing'; f.doingAt = nowStr(); saveDB(); loadFeedbacks(); loadStats();
+            fbRemoteUpdate(f, 'doing', f.reply || '');   // 同步进度到自营后台（处理中不发信）
           };
           ops.appendChild(d1);
         }
-        var d2 = document.createElement('button');
-        d2.className = 'btn btn-sm btn-ghost'; d2.textContent = '回复';
-        d2.onclick = function () {
-          var r = prompt('回复内容（保存后对访客可见并邮件通知访客）：', f.reply || '');
-          if (r !== null) {
-            f.reply = r; f.status = 'done'; f.doneAt = nowStr(); saveDB(); loadFeedbacks();
-            fbRemoteUpdate(f, 'done', r);
-          }
-        };
-        ops.appendChild(d2);
+        if (skey !== 'done') {
+          var d2 = document.createElement('button');
+          d2.className = 'btn btn-sm btn-ghost'; d2.textContent = '回复并结单';
+          d2.onclick = function () {
+            var r = prompt('回复内容（保存后在主站「我的反馈记录」对访客可见）：', f.reply || '');
+            if (r !== null) {
+              f.reply = r; f.status = 'done'; f.doneAt = nowStr(); saveDB(); loadFeedbacks(); loadStats();
+              fbRemoteUpdate(f, 'done', r);
+            }
+          };
+          ops.appendChild(d2);
+        }
+        if (skey === 'done') {
+          var d4 = document.createElement('button');
+          d4.className = 'btn btn-sm btn-ghost'; d4.textContent = '重新打开';
+          d4.onclick = function () {
+            f.status = 'doing'; saveDB(); loadFeedbacks(); loadStats();
+            fbRemoteUpdate(f, 'doing', f.reply || '');
+          };
+          ops.appendChild(d4);
+        }
       }
       if (isOwner() && !f.remote) {
         var d3 = document.createElement('button');
@@ -3029,24 +3110,9 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   function exportCsv() {
     var list = filteredFeedbacks();
     if (!list.length) { alert('没有可导出的数据'); return; }
-    var rows = [['时间', '站点', '类型', '内容', '回复', '可联系', '手机号(脱敏)', '邮箱(脱敏)', '状态']];
-    list.forEach(function (f) {
-      var phone = (f.phone || '').trim(), email = (f.email || '').trim();
-      rows.push([f.createdAt, getSiteName(f.siteKey), f.type, f.content, f.reply || '',
-        fbHasContact(f) ? '可联系' : '',
-        phone ? maskPhone(phone) : '',
-        email ? maskEmail(email) : '',
-        f.status === 'new' ? '待处理' : '已处理']);
-    });
-    var csv = rows.map(function (r) {
-      return r.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',');
-    }).join(String.fromCharCode(10));
-    var blob = new Blob([String.fromCharCode(0xFEFF) + csv], { type: 'text/csv;charset=utf-8' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'feedbacks_' + todayStr() + '.csv';
-    a.click();
-    URL.revokeObjectURL(a.href);
+    var rows = [FB_CSV_HEAD];
+    list.forEach(function (f) { rows.push(fbCsvRow(f)); });
+    fbCsvDownload(rows, 'feedbacks_' + todayStr() + '.csv');
   }
 
   // ===== 统计 =====
@@ -3283,8 +3349,8 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     ANN_STATE.loading = true;
     var status = $('annStatus');
     if (status && (force || !ANN_STATE.items.length)) {
-      status.className = 'gh-status';
-      status.innerHTML = '<span class="gh-hint">正在从后端拉取公告列表…</span>';
+      status.className = 'list-status';
+      status.innerHTML = '<span class="hint-note">正在从后端拉取公告列表…</span>';
     }
     return recRequest('/api/announcements?scope=admin&status=all').then(function (data) {
       ANN_STATE.items = annExtractList(data);
@@ -3320,12 +3386,12 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     wrap.innerHTML = '';
     if (status) {
       if (ANN_STATE.error) {
-        status.className = 'gh-status';
-        status.innerHTML = '<span class="gh-err">公告接口暂不可用：' + esc(ANN_STATE.error)
+        status.className = 'list-status';
+        status.innerHTML = '<span class="list-err">公告接口暂不可用：' + esc(ANN_STATE.error)
           + '<br>请确认「系统设置 → 推荐机型接口配置」中的后端地址与管理令牌后点击「刷新列表」重试。</span>';
       } else {
-        status.className = 'gh-status';
-        status.innerHTML = '<span class="gh-hint">共 ' + all.length + ' 条公告（对外 ' + all.filter(function (n) { return n.scope === 'public' && !n.revoked; }).length
+        status.className = 'list-status';
+        status.innerHTML = '<span class="hint-note">共 ' + all.length + ' 条公告（对外 ' + all.filter(function (n) { return n.scope === 'public' && !n.revoked; }).length
           + ' · 对内 ' + all.filter(function (n) { return n.scope === 'internal' && !n.revoked; }).length
           + '）· 上次同步 ' + esc(ANN_STATE.lastSync || '—') + '</span>';
       }
@@ -3401,31 +3467,6 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       alert('撤回失败：' + ((err && err.message) ? err.message : '未知错误'));
     });
   }
-  /** 保存 GitHub 每次拉取条数上限到本地配置 */
-  function saveGhPerPageConfig() {
-    var input = $('ghPerPageInput');
-    var msg = $('ghCfgMsg');
-    var n = parseInt(input ? input.value : '', 10);
-    if (!n || isNaN(n) || n < 1) {
-      msg.className = 'form-msg err';
-      msg.textContent = '请输入 1–100 之间的整数（GitHub 单页上限 100）';
-      return;
-    }
-    if (n > 100) n = 100;
-    db.settings.ghPerPage = n;
-    saveDB();
-    if (input) input.value = n;
-    msg.className = 'form-msg ok';
-    msg.textContent = '已保存：每次最多拉取 ' + n + ' 条，正在重新拉取…';
-    renderLiveStats();
-    loadGitHubIssues(true);
-    loadLiveGitHub();
-    setTimeout(function () {
-      var m = $('ghCfgMsg');
-      if (m && m.className.indexOf('ok') >= 0) m.textContent = '配置已保存（每次最多 ' + n + ' 条）';
-    }, 2000);
-  }
-
   // ===== 敏感面板身份验证（登录密码） =====
   var GATE_KEY = 'aa_gate_ok_v1';
   var SENSITIVE_PAGES = ['notices', 'trash', 'sites', 'settings'];
@@ -3455,7 +3496,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     setTimeout(function () { var p = $('gatePwd'); if (p) p.focus(); }, 30);
     return false;
   }
-  var GATE_PAGE_TITLES = { dashboard: '数据看板', feedbacks: '反馈管理', 'github-feedbacks': 'GitHub 与推荐', notices: '公告管理', trash: '回收站', sites: '站点管理', settings: '系统设置' };
+  var GATE_PAGE_TITLES = { dashboard: '数据看板', feedbacks: '反馈管理', recommendations: '推荐机型', notices: '公告管理', trash: '回收站', sites: '站点管理', settings: '系统设置' };
   function closeGate() {
     gateState.pending = null;
     var gm = $('gateModal'); if (gm) gm.classList.add('hidden');
@@ -3533,7 +3574,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   function loadOpsTopics() {
     if (typeof isGuest === 'function' && isGuest()) return;
     var st = $('opsStatus');
-    if (st && !OPS_STATE.data) st.innerHTML = '<span class="gh-hint">正在拉取运营选题…</span>';
+    if (st && !OPS_STATE.data) st.innerHTML = '<span class="hint-note">正在拉取运营选题…</span>';
     return recRequest('/api/ops-topics?days=' + OPS_STATE.days + '&limit=20').then(function (data) {
       OPS_STATE.data = data;
       OPS_STATE.error = '';
@@ -3549,8 +3590,8 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     var ml = $('opsMissingList'), ql = $('opsQuestionList');
     if (!st || !statsEl || !ml || !ql) return;
     if (OPS_STATE.error) {
-      st.className = 'gh-status';
-      st.innerHTML = '<span class="gh-err">拉取失败：' + esc(OPS_STATE.error)
+      st.className = 'list-status';
+      st.innerHTML = '<span class="list-err">拉取失败：' + esc(OPS_STATE.error)
         + '<br>请确认「系统设置 → 推荐机型接口配置」中的后端地址与管理令牌，然后点击「刷新榜单」重试。</span>';
       statsEl.innerHTML = '';
       ml.innerHTML = '<p class="empty">—</p>';
@@ -3559,8 +3600,8 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     }
     var d = OPS_STATE.data || {};
     var s = d.stats || {};
-    st.className = 'gh-status';
-    st.innerHTML = '<span class="gh-hint">统计窗口：近 ' + (d.days || OPS_STATE.days) + ' 天 · 更新于 ' + esc(recFmtTime(d.updatedAt)) + '</span>';
+    st.className = 'list-status';
+    st.innerHTML = '<span class="hint-note">统计窗口：近 ' + (d.days || OPS_STATE.days) + ' 天 · 更新于 ' + esc(recFmtTime(d.updatedAt)) + '</span>';
     statsEl.innerHTML = ''
       + '<div class="ops-stat"><div class="ops-stat-num">' + (s.searchTotal || 0) + '</div><div class="ops-stat-label">自然语言找飞机 · 检索次数</div></div>'
       + '<div class="ops-stat"><div class="ops-stat-num">' + (s.searchMiss || 0) + ' <span style="font-size:12px;color:#9dc4ff">(' + (s.searchMissRate || 0) + '%)</span></div><div class="ops-stat-label">其中未命中（库里没有）</div></div>'
@@ -4129,7 +4170,6 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     renderVisitorAdminList();
     var bi = $('apiBaseInput'); if (bi) bi.value = (db.settings.adminApiBase || '');
     var ti = $('apiTokenInput'); if (ti) ti.value = (db.settings.adminToken || '');
-    var gi = $('ghPerPageInput'); if (gi) gi.value = ghPerPage();
     renderAdminSessionState(false);
     updateSessionSummary();
     touchSession(); saveDB();
@@ -4420,7 +4460,18 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     });
     $('searchInput').addEventListener('input', function () { state.search = this.value; loadFeedbacks(); });
     $('exportBtn').addEventListener('click', exportCsv);
-    $('ghRefreshBtn').addEventListener('click', function () { loadGitHubIssues(true); });
+    // 反馈管理：明细表格 / 月度汇总 视图切换、按月份筛选、月度汇总导出（口径与主站一致）
+    $('fbViewChips').addEventListener('click', function (e) {
+      var chip = e.target.closest('#fbViewChips .chip');
+      if (!chip) return;
+      state.fbView = chip.getAttribute('data-view') || 'detail';
+      fbApplyView();
+    });
+    $('fbMonthSelect').addEventListener('change', function () {
+      state.monthFilter = this.value || 'all';
+      loadFeedbacks();
+    });
+    $('fbMonthlyExportBtn').addEventListener('click', exportMonthlyCsv);
     $('aiSummaryBtn').addEventListener('click', aiSummary);
     $('aiWeeklyBtn').addEventListener('click', aiWeekly);
     $('noteAddBtn').addEventListener('click', addNote);
@@ -4448,9 +4499,6 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     }
     var annRefresh = $('annRefreshBtn');
     if (annRefresh) annRefresh.addEventListener('click', function () { loadAnnouncements(true); });
-    // GitHub 拉取条数上限保存
-    var ghSave = $('saveGhCfgBtn');
-    if (ghSave) ghSave.addEventListener('click', saveGhPerPageConfig);
     // 敏感面板身份验证（登录密码）
     var gateForm = $('gateForm');
     if (gateForm) gateForm.addEventListener('submit', verifyGate);
@@ -4528,11 +4576,6 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     }
     $('recCancelBtn').addEventListener('click', closeRecReview);
     $('recForm').addEventListener('submit', submitRecReview);
-    $('aggChips').addEventListener('click', function (e) {
-      var chip = e.target.closest('#aggChips .chip');
-      if (!chip) return;
-      switchAggTab(chip.getAttribute('data-agg'));
-    });
     $('clearSessionsBtn').addEventListener('click', clearSessionsWithBackup);
     $('saveApiBtn').addEventListener('click', saveApiConfig);
     var csBtn = $('checkSessionBtn');

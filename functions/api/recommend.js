@@ -47,6 +47,12 @@ export async function onRequestPost({ request, env }) {
     if (specs && typeof specs !== 'string') specs = JSON.stringify(specs);
     specs = str(specs, 2000);
     const submittedAt = str(body.submittedAt, 40) || nowIso();
+    // 生产年份（主站 p3BuildPayload 字段名 prodDate，如 '2013' 或 '2013-06'）
+    const prodDate = str(body.prodDate, 40);
+    // 所属航司 ID 列表（主站传数组，D1 内以 JSON 字符串落库）
+    let airlineIds = body.airlineIds;
+    if (airlineIds && typeof airlineIds !== 'string') airlineIds = JSON.stringify(airlineIds);
+    airlineIds = str(airlineIds, 500);
 
     if (!nameZh) return fail('缺少必填字段：nameZh（机型名称）', 400, request);
     if (!uid) return fail('缺少必填字段：uid（提交人匿名ID）', 400, request);
@@ -88,9 +94,9 @@ export async function onRequestPost({ request, env }) {
     // ---- 写库 ----
     await env.DB.prepare(
       'INSERT INTO recommendations ' +
-      '(id, uid, nameZh, code, category, country, image_key, descZh, specs, submitted_at, status, reply, reviewed_at) ' +
-      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', '', NULL)"
-    ).bind(id, uid, nameZh, code, category, country, imageKey, descZh, specs, submittedAt).run();
+      '(id, uid, nameZh, code, category, country, image_key, descZh, specs, prodDate, airlineIds, submitted_at, status, reply, reviewed_at) ' +
+      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', '', NULL)"
+    ).bind(id, uid, nameZh, code, category, country, imageKey, descZh, specs, prodDate, airlineIds, submittedAt).run();
 
     return json({
       ok: true,

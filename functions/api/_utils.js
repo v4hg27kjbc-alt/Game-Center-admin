@@ -384,6 +384,21 @@ export function parseSpecsField(raw) {
   }
 }
 
+/** airlineIds 字段解析（兼容 JSON 数组字符串 / 逗号分隔字符串） */
+export function parseAirlineIds(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map((v) => String(v)).filter(Boolean);
+  const s = String(raw).trim();
+  if (!s) return [];
+  if (s.charAt(0) === '[') {
+    try {
+      const arr = JSON.parse(s);
+      if (Array.isArray(arr)) return arr.map((v) => String(v)).filter(Boolean);
+    } catch (e) { /* 退回逗号分隔解析 */ }
+  }
+  return s.split(',').map((v) => v.trim()).filter(Boolean);
+}
+
 /** D1 行 → 主站/后台通用字段（camelCase） */
 export function mapRecommendation(row) {
   if (!row) return null;
@@ -398,6 +413,8 @@ export function mapRecommendation(row) {
     image: imageUrlOf(row.image_key),
     descZh: row.descZh || '',
     specs: parseSpecsField(row.specs),
+    prodDate: row.prodDate || '',
+    airlineIds: parseAirlineIds(row.airlineIds),
     submittedAt: row.submitted_at || '',
     status: row.status || 'pending',
     reply: row.reply || '',

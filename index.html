@@ -919,6 +919,29 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
 }
 .nav-item.with-ic { display: flex; align-items: center; gap: 8px; }
 .nav-item.with-ic svg { flex-shrink: 0; }
+.ops-stats { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
+.ops-stat { flex: 1 1 180px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 10px 12px; }
+.ops-stat-num { font-size: 20px; font-weight: 700; color: #fff; }
+.ops-stat-label { font-size: 12px; color: rgba(255,255,255,.6); margin-top: 2px; }
+.ops-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 900px) { .ops-grid { grid-template-columns: 1fr; } }
+.ops-col { background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); border-radius: 14px; padding: 12px; }
+.ops-col-title { font-size: 13.5px; font-weight: 600; color: #fff; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ops-tip { font-size: 11px; color: rgba(255,255,255,.45); font-weight: 400; }
+.ops-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px dashed rgba(255,255,255,.08); }
+.ops-item:last-child { border-bottom: 0; }
+.ops-item-idx { flex: 0 0 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 50%; background: rgba(124,179,255,.18); color: #9dc4ff; font-size: 11.5px; }
+.ops-item-main { flex: 1 1 auto; min-width: 0; }
+.ops-item-term { font-size: 13px; color: #eaf0ff; word-break: break-all; }
+.ops-item-meta { font-size: 11.5px; color: rgba(255,255,255,.5); margin-top: 3px; }
+.rec-ai-advice { margin-top: 10px; }
+.ai-advice-card { border: 1px solid rgba(124,179,255,.35); background: rgba(124,179,255,.08); border-radius: 12px; padding: 10px 12px; }
+.ai-advice-head { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: #9dc4ff; margin-bottom: 6px; }
+.ai-advice-row { font-size: 12.5px; color: #dfe6f5; line-height: 1.65; }
+.ai-advice-row b { color: #fff; }
+.ai-advice-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.ai-advice-note { font-size: 11.5px; color: rgba(255,255,255,.45); margin-top: 6px; }
+
 @media (max-width: 720px) { .gh-preview { -webkit-line-clamp: 2; } }
 
 /* ===== 首页实时信息（置顶中央主区，复用卡片视觉语言） ===== */
@@ -1073,6 +1096,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       <a href="#" class="nav-item" data-page="notices" data-role="owner,admin">公告管理</a>
       <a href="#" class="nav-item" data-page="trash" data-role="owner,admin">回收站</a>
       <a href="#" class="nav-item" data-page="sites" data-role="owner">站点管理</a>
+      <a href="#" class="nav-item" data-page="ops" data-role="owner,admin">运营选题</a>
       <a href="#" class="nav-item" data-page="settings" data-role="owner,admin">系统设置</a>
     </nav>
   </aside>
@@ -1262,11 +1286,42 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
                 <button class="chip" data-rec="approved">已采纳</button>
                 <button class="chip" data-rec="rejected">已驳回</button>
               </div>
+              <button id="recAiAuditAllBtn" class="btn btn-ghost">AI 批量预审</button>
               <button id="recRefreshBtn" class="btn btn-primary">刷新列表</button>
             </div>
           </div>
           <div id="recStatus" class="gh-status"></div>
           <div id="recList" class="rec-list"></div>
+        </div>
+      </section>
+
+      <!-- 运营选题（后端 /api/ops-topics，数据来自主站检索与问答日志） -->
+      <section id="page-ops" class="page hidden">
+        <div class="toolbar">
+          <div>
+            <div class="toolbar-title">运营选题 · 未满足需求榜</div>
+            <p class="gh-sub">数据来自主站「自然语言找飞机」与「问 AI」的真实访问日志：左侧是用户想找、库里还没有的机型（可直接变成运营选题），右侧是 AI 答不上来的问题（指导补库）。</p>
+          </div>
+          <div class="toolbar-right">
+            <div class="chips" id="opsDaysChips">
+              <button class="chip" data-ops-days="7">近 7 天</button>
+              <button class="chip active" data-ops-days="30">近 30 天</button>
+              <button class="chip" data-ops-days="90">近 90 天</button>
+            </div>
+            <button id="opsRefreshBtn" class="btn btn-primary">刷新榜单</button>
+          </div>
+        </div>
+        <div id="opsStatus" class="gh-status"></div>
+        <div id="opsStats" class="ops-stats"></div>
+        <div class="ops-grid">
+          <div class="ops-col">
+            <div class="ops-col-title">用户想找但库里没有的机型 <span class="ops-tip">→ 运营选题</span></div>
+            <div id="opsMissingList" class="ops-list"></div>
+          </div>
+          <div class="ops-col">
+            <div class="ops-col-title">AI 答不上来的问题 Top <span class="ops-tip">→ 指导补库</span></div>
+            <div id="opsQuestionList" class="ops-list"></div>
+          </div>
         </div>
       </section>
 
@@ -1744,7 +1799,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   function switchPage(name) {
     // 敏感面板前置身份验证（登录密码）
     if (typeof requireGate === 'function' && !requireGate(name)) return;
-    var pages = ['dashboard', 'feedbacks', 'github-feedbacks', 'notices', 'trash', 'sites', 'settings'];
+    var pages = ['dashboard', 'feedbacks', 'github-feedbacks', 'ops', 'notices', 'trash', 'sites', 'settings'];
     for (var i = 0; i < pages.length; i++) {
       $('page-' + pages[i]).classList.toggle('hidden', pages[i] !== name);
     }
@@ -1752,11 +1807,12 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     for (var j = 0; j < navs.length; j++) {
       navs[j].classList.toggle('active', navs[j].getAttribute('data-page') === name);
     }
-    var titles = { dashboard: '数据看板', feedbacks: '反馈管理', 'github-feedbacks': 'GitHub 与推荐', notices: '公告管理', trash: '回收站', sites: '站点管理', settings: '系统设置' };
+    var titles = { dashboard: '数据看板', feedbacks: '反馈管理', 'github-feedbacks': 'GitHub 与推荐', ops: '运营选题', notices: '公告管理', trash: '回收站', sites: '站点管理', settings: '系统设置' };
     $('pageTitle').textContent = titles[name] || '';
     if (name === 'dashboard') { loadStats(); renderTrend(); renderRecent(); renderNotes(); refreshLivePanels(); }
     if (name === 'feedbacks') loadFeedbacks();
     if (name === 'github-feedbacks') { loadGitHubIssues(false); switchAggTab(REC_STATE.aggTab); }
+    if (name === 'ops') loadOpsTopics();
     if (name === 'notices') loadAnnouncements(false);
     if (name === 'trash') renderTrash();
     if (name === 'sites') renderSites();
@@ -2255,6 +2311,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
         + (r.descZh ? '<div class="rec-desc">' + esc(r.descZh) + '</div>' : '')
         + (specs ? '<div class="rec-desc">规格：' + esc(specs) + '</div>' : '')
         + '<div class="rec-reply">管理员反馈：' + esc(r.reply ? r.reply : '—') + '</div>'
+        + '<div class="rec-ai-advice" id="recAiAdvice-' + esc(r.id) + '"></div>'
         + '</div>'
         + '<div class="rec-side">'
         + '<span class="rec-status ' + stt + '">' + recStatusText(stt) + '</span>'
@@ -2262,6 +2319,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
         + '<button class="btn btn-primary btn-sm" data-rec-act="approved" data-id="' + esc(r.id) + '">采纳</button>'
         + '<button class="btn btn-danger btn-sm" data-rec-act="rejected" data-id="' + esc(r.id) + '">驳回</button>'
         + '</div>'
+        + (stt === 'pending' ? '<button class="btn btn-sm btn-ghost" data-ai-audit="' + esc(r.id) + '">AI 预审</button>' : '')
         + '<span class="live-sub">审核时间 ' + esc(recFmtTime(r.reviewedAt)) + '</span>'
         + '</div></div>';
     }
@@ -2793,7 +2851,43 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     } else {
       lines.push('暂无反馈记录');
     }
-    lines.push('请用中文总结当前运营情况，指出重点问题与建议，控制在150字以内。');
+    // 机型推荐与运营选题数据（让日报有内容可写）
+    var recAll = (typeof REC_STATE !== 'undefined' && REC_STATE.items) ? REC_STATE.items : [];
+    if (recAll.length) {
+      var pendRec = 0, apprRec = 0, rejRec = 0;
+      recAll.forEach(function (x) {
+        var st = x.status || 'pending';
+        if (st === 'approved') apprRec++;
+        else if (st === 'rejected') rejRec++;
+        else pendRec++;
+      });
+      lines.push('用户推荐机型：共 ' + recAll.length + ' 条（待审核 ' + pendRec + ' / 已采纳 ' + apprRec + ' / 已驳回 ' + rejRec + '）');
+      var recentRec = recAll.slice(0, 5);
+      if (recentRec.length) {
+        lines.push('最近提交机型：' + recentRec.map(function (x) { return (x.nameZh || '') + (x.code ? '（' + x.code + '）' : ''); }).join('、'));
+      }
+    }
+    if (typeof NEWS_STATE !== 'undefined' && NEWS_STATE.items && NEWS_STATE.items.length) {
+      lines.push('航空快讯：当前抓取 ' + NEWS_STATE.items.length + ' 条，最近标题：' + NEWS_STATE.items.slice(0, 5).map(function (x) { return x.title || ''; }).join(' / '));
+    }
+    if (typeof OPS_STATE !== 'undefined' && OPS_STATE.data) {
+      var od = OPS_STATE.data;
+      var ost = od.stats || {};
+      lines.push('主站「自然语言找飞机」：近 ' + (od.days || 30) + ' 天检索 ' + (ost.searchTotal || 0) + ' 次，未命中 ' + (ost.searchMiss || 0) + ' 次（' + (ost.searchMissRate || 0) + '%）');
+      if (od.missingAircraft && od.missingAircraft.length) {
+        lines.push('用户想找但库里没有的机型 Top：' + od.missingAircraft.slice(0, 8).map(function (x) { return (x.term || '') + '(' + (x.count || 0) + '次)'; }).join('、'));
+      }
+      lines.push('主站「问 AI」：提问 ' + (ost.qaTotal || 0) + ' 次，答不上来 ' + (ost.qaMiss || 0) + ' 次（' + (ost.qaMissRate || 0) + '%）');
+      if (od.unansweredQuestions && od.unansweredQuestions.length) {
+        lines.push('AI 答不上来的问题 Top：' + od.unansweredQuestions.slice(0, 8).map(function (x) { return (x.question || '') + '(' + (x.count || 0) + '次)'; }).join('、'));
+      }
+    }
+    lines.push('请用中文写一份「民航客机收藏馆」的当日运营日报，要求：');
+    lines.push('1) 篇幅不少于 400 字，分四个小标题：整体概况 / 重点问题 / 机型与内容动向 / 建议行动；');
+    lines.push('2) 用上述具体数字支撑判断，不要空话套话，不要罗列原始数据行；');
+    lines.push('3) 「建议行动」给出 3 条可执行动作，优先针对未命中检索与答不上来的问题；');
+    lines.push('4) 若某项数据缺失，明确指出还需要补充哪些数据；');
+    lines.push('5) 语气专业克制，不要寒暄、不要称呼读者、不要 Markdown 符号堆砌。');
     return lines.join(String.fromCharCode(10));
   }
   function aiSummary() {
@@ -3160,11 +3254,211 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     }
   }
 
+  // ===== 运营选题（未满足需求榜） =====
+  var OPS_STATE = { days: 30, data: null, error: '' };
+  function opsReasonText(r) {
+    if (r === 'retrieval-empty') return '库里没检索到';
+    if (r === 'insufficient-context') return '站内上下文不足';
+    if (r === 'llm-failed') return '模型调用失败';
+    return r || '—';
+  }
+  function loadOpsTopics() {
+    if (typeof isGuest === 'function' && isGuest()) return;
+    var st = $('opsStatus');
+    if (st && !OPS_STATE.data) st.innerHTML = '<span class="gh-hint">正在拉取运营选题…</span>';
+    return recRequest('/api/ops-topics?days=' + OPS_STATE.days + '&limit=20').then(function (data) {
+      OPS_STATE.data = data;
+      OPS_STATE.error = '';
+      renderOpsTopics();
+      return data;
+    }).catch(function (err) {
+      OPS_STATE.error = (err && err.message) ? err.message : '未知错误';
+      renderOpsTopics();
+    });
+  }
+  function renderOpsTopics() {
+    var st = $('opsStatus'), statsEl = $('opsStats');
+    var ml = $('opsMissingList'), ql = $('opsQuestionList');
+    if (!st || !statsEl || !ml || !ql) return;
+    if (OPS_STATE.error) {
+      st.className = 'gh-status';
+      st.innerHTML = '<span class="gh-err">拉取失败：' + esc(OPS_STATE.error)
+        + '<br>请确认「系统设置 → 推荐机型接口配置」中的后端地址与管理令牌，然后点击「刷新榜单」重试。</span>';
+      statsEl.innerHTML = '';
+      ml.innerHTML = '<p class="empty">—</p>';
+      ql.innerHTML = '<p class="empty">—</p>';
+      return;
+    }
+    var d = OPS_STATE.data || {};
+    var s = d.stats || {};
+    st.className = 'gh-status';
+    st.innerHTML = '<span class="gh-hint">统计窗口：近 ' + (d.days || OPS_STATE.days) + ' 天 · 更新于 ' + esc(recFmtTime(d.updatedAt)) + '</span>';
+    statsEl.innerHTML = ''
+      + '<div class="ops-stat"><div class="ops-stat-num">' + (s.searchTotal || 0) + '</div><div class="ops-stat-label">自然语言找飞机 · 检索次数</div></div>'
+      + '<div class="ops-stat"><div class="ops-stat-num">' + (s.searchMiss || 0) + ' <span style="font-size:12px;color:#9dc4ff">(' + (s.searchMissRate || 0) + '%)</span></div><div class="ops-stat-label">其中未命中（库里没有）</div></div>'
+      + '<div class="ops-stat"><div class="ops-stat-num">' + (s.qaTotal || 0) + '</div><div class="ops-stat-label">问 AI · 提问次数</div></div>'
+      + '<div class="ops-stat"><div class="ops-stat-num">' + (s.qaMiss || 0) + ' <span style="font-size:12px;color:#ffc46b">(' + (s.qaMissRate || 0) + '%)</span></div><div class="ops-stat-label">其中答不上来</div></div>';
+    var ma = d.missingAircraft || [];
+    if (!ma.length) {
+      ml.innerHTML = '<p class="empty">暂无未命中记录：要么用户想找的机型库里都有，要么还没人用自然语言找飞机。</p>';
+    } else {
+      ml.innerHTML = ma.map(function (x, i) {
+        return '<div class="ops-item"><span class="ops-item-idx">' + (i + 1) + '</span>'
+          + '<div class="ops-item-main"><div class="ops-item-term">' + esc(x.term || '') + '</div>'
+          + '<div class="ops-item-meta">被找 ' + (x.count || 0) + ' 次 · 最近 ' + esc(recFmtTime(x.lastAt)) + '</div></div>'
+          + '<button class="btn btn-sm btn-ghost" data-ops-copy-m="' + i + '">复制选题</button></div>';
+      }).join('');
+    }
+    var uq = d.unansweredQuestions || [];
+    if (!uq.length) {
+      ql.innerHTML = '<p class="empty">暂无答不上来的问题：RAG 检索都能覆盖，或还没有问答记录。</p>';
+    } else {
+      ql.innerHTML = uq.map(function (x, i) {
+        return '<div class="ops-item"><span class="ops-item-idx">' + (i + 1) + '</span>'
+          + '<div class="ops-item-main"><div class="ops-item-term">' + esc(x.question || '') + '</div>'
+          + '<div class="ops-item-meta">被问 ' + (x.count || 0) + ' 次 · ' + esc(opsReasonText(x.reason)) + ' · 最近 ' + esc(recFmtTime(x.lastAt)) + '</div></div>'
+          + '<button class="btn btn-sm btn-ghost" data-ops-copy-q="' + i + '">复制选题</button></div>';
+      }).join('');
+    }
+  }
+
+  // ===== AI 预审助手（待审推荐 → 建议卡） =====
+  var AI_AUDIT_STATE = { running: false, batch: false, cache: {} };
+  function aiAuditCtx() {
+    var lines = [];
+    var approved = REC_STATE.items.filter(function (x) { return x.status === 'approved'; });
+    lines.push('已采纳机型（共 ' + approved.length + ' 款，用于重复检测）：');
+    approved.slice(0, 80).forEach(function (x) { lines.push('- ' + (x.nameZh || '') + (x.code ? ' / ' + x.code : '')); });
+    var pending = REC_STATE.items.filter(function (x) { return (x.status || 'pending') === 'pending'; });
+    lines.push('其他待审机型（用于重复检测）：');
+    pending.slice(0, 40).forEach(function (x) { lines.push('- ' + (x.nameZh || '') + (x.code ? ' / ' + x.code : '')); });
+    return lines.join(String.fromCharCode(10));
+  }
+  function aiAuditParse(raw) {
+    if (!raw) return null;
+    var t = String(raw).trim();
+    t = t.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+    if (t.charAt(0) !== '{') {
+      var i = t.indexOf('{');
+      var j = t.lastIndexOf('}');
+      if (i < 0 || j <= i) return null;
+      t = t.slice(i, j + 1);
+    }
+    try { return JSON.parse(t); } catch (e) { return null; }
+  }
+  function aiAuditRec(id) {
+    var item = null;
+    for (var i = 0; i < REC_STATE.items.length; i++) {
+      if (String(REC_STATE.items[i].id) === String(id)) { item = REC_STATE.items[i]; break; }
+    }
+    if (!item) return;
+    var box = $('recAiAdvice-' + id);
+    if (box) box.innerHTML = '<div class="ai-advice-card"><div class="ai-advice-head"><span>AI 预审中…</span></div><div class="ai-advice-row">正在分析机型规范名、规格单位与重复情况，请稍候…</div></div>';
+    var specs = item.specs ? (typeof item.specs === 'string' ? item.specs : JSON.stringify(item.specs)) : '';
+    var prompt = [
+      '你是民航机型数据库的资料审核助手。请审核下面这条用户提交的机型推荐，并严格只输出一个 JSON 对象，不要任何解释、不要 markdown 代码块。',
+      'JSON 字段要求：{"nameZh":"规范中文机型名","code":"规范型号（英文/数字代号）","category":"分类（窄体/宽体/支线/货机/公务机等）","specs":{"中文键":"标准化后的值"},"duplicate":{"isDup":true/false,"target":"重复对象","reason":"判断依据"},"decision":"approved 或 rejected","confidence":0-1 的小数,"replyDraft":"写给提交用户的中文反馈，80-160字，含规范结果与说明"}',
+      'specs 标准化要求：键名统一使用中文（如 航程 / 载客量 / 机身长度 / 翼展 / 巡航速度 / 最大起飞重量 / 发动机 / 首飞年份 / 生产年份），航程与长度等单位统一为 km/m，保留数值类型，去掉重复键与明显错别字。',
+      '重复检测：与下面已采纳机型、其他待审机型比对，若为同一机型（含中英文名、型号代号差异）则 isDup 为 true 并指出重复对象。',
+      '审核基准：机型名称与型号属实、分类无误、规格无明显错填 → approved；机型不存在、名称与型号明显不符、重复机型、规格严重失实 → rejected。',
+      '【待审机型】',
+      '中文名：' + (item.nameZh || ''),
+      '型号：' + (item.code || ''),
+      '分类：' + (item.category || ''),
+      '国家/地区：' + (item.country || ''),
+      '规格：' + specs,
+      '简介：' + (item.descZh || ''),
+      aiAuditCtx()
+    ].join(String.fromCharCode(10));
+    callGLMSummary(prompt).then(function (txt) {
+      var data = aiAuditParse(txt);
+      if (!data) {
+        if (box) box.innerHTML = '<div class="ai-advice-card"><div class="ai-advice-head"><span>AI 预审失败</span></div><div class="ai-advice-row">模型返回内容无法解析为结构化建议，可重试。</div><div class="ai-advice-actions"><button class="btn btn-sm btn-ghost" data-ai-audit="' + esc(id) + '">重新预审</button></div></div>';
+        return;
+      }
+      AI_AUDIT_STATE.cache[id] = data;
+      renderRecAiAdvice(id, data);
+    }).catch(function () {
+      if (box) box.innerHTML = '<div class="ai-advice-card"><div class="ai-advice-head"><span>AI 预审失败</span></div><div class="ai-advice-row">调用失败，请检查「系统设置」中的 AI 接口配置后重试。</div><div class="ai-advice-actions"><button class="btn btn-sm btn-ghost" data-ai-audit="' + esc(id) + '">重新预审</button></div></div>';
+    });
+  }
+  function renderRecAiAdvice(id, d) {
+    var box = $('recAiAdvice-' + id);
+    if (!box) return;
+    var specs = d.specs || {};
+    var specParts = [];
+    for (var k in specs) {
+      if (Object.prototype.hasOwnProperty.call(specs, k)) specParts.push(k + '：' + specs[k]);
+    }
+    var dup = d.duplicate || {};
+    var isApprove = (String(d.decision || '').toLowerCase() === 'approved');
+    var conf = (typeof d.confidence === 'number') ? Math.round(d.confidence * 100) + '%' : '—';
+    box.innerHTML = '<div class="ai-advice-card">'
+      + '<div class="ai-advice-head"><span>AI 建议卡 · 置信度 ' + conf + '</span><span>' + (isApprove ? '建议采纳' : '建议驳回') + '</span></div>'
+      + '<div class="ai-advice-row"><b>规范机型名：</b>' + esc(d.nameZh || '—') + ' &nbsp;<b>规范型号：</b>' + esc(d.code || '—') + '</div>'
+      + '<div class="ai-advice-row"><b>分类：</b>' + esc(d.category || '—') + '</div>'
+      + '<div class="ai-advice-row"><b>标准化 specs：</b>' + esc(specParts.length ? specParts.join(' · ') : '—') + '</div>'
+      + '<div class="ai-advice-row"><b>重复检测：</b>' + (dup.isDup ? ('疑似重复 → ' + esc(dup.target || '') + '（' + esc(dup.reason || '') + '）') : '未发现重复') + '</div>'
+      + '<div class="ai-advice-row"><b>反馈草稿：</b>' + esc(d.replyDraft || '—') + '</div>'
+      + '<div class="ai-advice-actions">'
+      + '<button class="btn btn-sm btn-primary" data-ai-apply="approved" data-id="' + esc(id) + '">用草稿采纳</button>'
+      + '<button class="btn btn-sm btn-danger" data-ai-apply="rejected" data-id="' + esc(id) + '">用草稿驳回</button>'
+      + '<button class="btn btn-sm btn-ghost" data-ai-copy="' + esc(id) + '">复制规范化字段</button>'
+      + '</div>'
+      + '<div class="ai-advice-note">建议由 AI 生成，采纳/驳回前请人工复核；草稿会自动填入反馈框，仍可编辑。</div>'
+      + '</div>';
+  }
+  function aiApplyAdvice(id, status) {
+    var d = AI_AUDIT_STATE.cache[id];
+    openRecReview(id, status);
+    var ta = $('recReplyInput');
+    if (ta && d && d.replyDraft) ta.value = String(d.replyDraft);
+  }
+  function aiCopyAdvice(id) {
+    var d = AI_AUDIT_STATE.cache[id];
+    if (!d) return;
+    var specs = d.specs || {};
+    var lines = ['机型名：' + (d.nameZh || ''), '型号：' + (d.code || ''), '分类：' + (d.category || '')];
+    for (var k in specs) {
+      if (Object.prototype.hasOwnProperty.call(specs, k)) lines.push(k + '：' + specs[k]);
+    }
+    var txt = lines.join(String.fromCharCode(10));
+    try {
+      navigator.clipboard.writeText(txt);
+      alert('规范化字段已复制到剪贴板');
+    } catch (e) {
+      alert('复制失败，请手动选择文本复制');
+    }
+  }
+  function aiAuditPendingBatch() {
+    if (AI_AUDIT_STATE.batch) { alert('批量预审进行中，请稍候'); return; }
+    var pending = REC_STATE.items.filter(function (x) { return (x.status || 'pending') === 'pending'; });
+    if (!pending.length) { alert('当前没有待审推荐'); return; }
+    var queue = pending.slice(0, 5).map(function (x) { return x.id; });
+    AI_AUDIT_STATE.batch = true;
+    var btn = $('recAiAuditAllBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'AI 预审中 0/' + queue.length; }
+    var done = 0;
+    function next() {
+      if (!queue.length) {
+        AI_AUDIT_STATE.batch = false;
+        if (btn) { btn.disabled = false; btn.textContent = 'AI 批量预审'; }
+        return;
+      }
+      var id = queue.shift();
+      aiAuditRec(id);
+      done++;
+      if (btn) btn.textContent = 'AI 预审中 ' + done + '/' + (done + queue.length);
+      setTimeout(next, 1800);
+    }
+    next();
+  }
+
   // ===== AI 周报 =====
   function buildWeeklyPrompt() {
     var list = db.feedbacks;
     var lines = [];
-    lines.push('请基于以下数据生成一份面向民航收藏馆运营的中文周报，包含：本周概况、热点问题、建议行动三部分，控制在200字以内，简洁有条理。');
+    lines.push('请基于以下数据生成一份面向民航收藏馆运营的中文周报，要求：1) 篇幅不少于 600 字，分「本周概况」「热点问题」「机型与内容动向」「数据洞察」「下周行动」五个小标题；2) 用具体数字说明趋势与变化，不要空话；3) 「下周行动」给出 3-5 条可执行动作，明确到内容或机型补库；4) 语气专业克制，不要寒暄。');
     lines.push('总反馈数：' + list.length);
     var now = new Date();
     var weekStart = now.getTime() - 6 * 86400000;
@@ -3175,6 +3469,25 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     }).length;
     lines.push('近7日反馈：' + wk);
     lines.push('待处理：' + list.filter(function (f) { return f.status === 'new'; }).length);
+    // 推荐机型与主站行为数据
+    var wRecAll = (typeof REC_STATE !== 'undefined' && REC_STATE.items) ? REC_STATE.items : [];
+    if (wRecAll.length) {
+      var wPend = wRecAll.filter(function (x) { return (x.status || 'pending') === 'pending'; }).length;
+      var wAppr = wRecAll.filter(function (x) { return x.status === 'approved'; }).length;
+      lines.push('用户推荐机型：共 ' + wRecAll.length + ' 条（待审核 ' + wPend + ' / 已采纳 ' + wAppr + '）');
+    }
+    if (typeof OPS_STATE !== 'undefined' && OPS_STATE.data) {
+      var wd = OPS_STATE.data;
+      var ws = wd.stats || {};
+      lines.push('主站自然语言找飞机：检索 ' + (ws.searchTotal || 0) + ' 次，未命中 ' + (ws.searchMiss || 0) + ' 次');
+      if (wd.missingAircraft && wd.missingAircraft.length) {
+        lines.push('用户想找但库里没有的机型 Top：' + wd.missingAircraft.slice(0, 8).map(function (x) { return (x.term || '') + '(' + (x.count || 0) + '次)'; }).join('、'));
+      }
+      lines.push('主站问 AI：提问 ' + (ws.qaTotal || 0) + ' 次，答不上来 ' + (ws.qaMiss || 0) + ' 次');
+      if (wd.unansweredQuestions && wd.unansweredQuestions.length) {
+        lines.push('AI 答不上来的问题 Top：' + wd.unansweredQuestions.slice(0, 8).map(function (x) { return (x.question || '') + '(' + (x.count || 0) + '次)'; }).join('、'));
+      }
+    }
     var dist = {};
     list.forEach(function (f) { dist[f.type] = (dist[f.type] || 0) + 1; });
     var keys = Object.keys(dist);
@@ -3895,10 +4208,56 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       renderRecommendations();
     });
     $('recList').addEventListener('click', function (e) {
+      var auditBtn = e.target.closest('button[data-ai-audit]');
+      if (auditBtn) { aiAuditRec(auditBtn.getAttribute('data-ai-audit')); return; }
+      var applyBtn = e.target.closest('button[data-ai-apply]');
+      if (applyBtn) { aiApplyAdvice(applyBtn.getAttribute('data-id'), applyBtn.getAttribute('data-ai-apply')); return; }
+      var copyBtn = e.target.closest('button[data-ai-copy]');
+      if (copyBtn) { aiCopyAdvice(copyBtn.getAttribute('data-ai-copy')); return; }
       var btn = e.target.closest('button[data-rec-act]');
       if (!btn) return;
       openRecReview(btn.getAttribute('data-id'), btn.getAttribute('data-rec-act'));
     });
+    var aiAuditAll = $('recAiAuditAllBtn');
+    if (aiAuditAll) aiAuditAll.addEventListener('click', aiAuditPendingBatch);
+    var opsRefresh = $('opsRefreshBtn');
+    if (opsRefresh) opsRefresh.addEventListener('click', function () { loadOpsTopics(); });
+    var opsPage = $('page-ops');
+    if (opsPage) {
+      opsPage.addEventListener('click', function (e) {
+        var chip = e.target.closest('#opsDaysChips .chip');
+        if (chip) {
+          var dv = parseInt(chip.getAttribute('data-ops-days'), 10);
+          if (dv > 0) {
+            OPS_STATE.days = dv;
+            document.querySelectorAll('#opsDaysChips .chip').forEach(function (c) { c.classList.remove('active'); });
+            chip.classList.add('active');
+            loadOpsTopics();
+          }
+          return;
+        }
+        var cm = e.target.closest('button[data-ops-copy-m]');
+        if (cm) {
+          var mi = parseInt(cm.getAttribute('data-ops-copy-m'), 10);
+          var arr = (OPS_STATE.data && OPS_STATE.data.missingAircraft) || [];
+          if (arr[mi]) {
+            try { navigator.clipboard.writeText(arr[mi].term || ''); alert('选题已复制：' + (arr[mi].term || '')); }
+            catch (err) { alert('复制失败，请手动选择文本复制'); }
+          }
+          return;
+        }
+        var cq = e.target.closest('button[data-ops-copy-q]');
+        if (cq) {
+          var qi = parseInt(cq.getAttribute('data-ops-copy-q'), 10);
+          var qarr = (OPS_STATE.data && OPS_STATE.data.unansweredQuestions) || [];
+          if (qarr[qi]) {
+            try { navigator.clipboard.writeText(qarr[qi].question || ''); alert('选题已复制：' + (qarr[qi].question || '')); }
+            catch (err) { alert('复制失败，请手动选择文本复制'); }
+          }
+          return;
+        }
+      });
+    }
     $('recCancelBtn').addEventListener('click', closeRecReview);
     $('recForm').addEventListener('submit', submitRecReview);
     $('aggChips').addEventListener('click', function (e) {

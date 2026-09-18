@@ -14,7 +14,7 @@
 
 import {
   preflight, json, fail, readBody, str, nowIso, errText
-} from '../_utils.js';
+} from './_utils.js';
 
 export async function onRequestOptions({ request }) {
   return preflight(request);

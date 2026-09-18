@@ -13,7 +13,7 @@
 
 import {
   preflight, json, fail, isAdmin, unauthorized, errText
-} from '../_utils.js';
+} from './_utils.js';
 
 export async function onRequestOptions({ request }) {
   return preflight(request);

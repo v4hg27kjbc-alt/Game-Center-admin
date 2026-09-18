@@ -14,7 +14,7 @@
 
 import {
   preflight, json, fail, readBody, str, nowIso, errText
-} from '../_utils.js';
+} from './_utils.js';
 
 const REASONS = ['retrieval-empty', 'insufficient-context', 'llm-failed'];
 

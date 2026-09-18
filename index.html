@@ -309,6 +309,10 @@ input, select { font-family: inherit; }
 /* v67：反馈联系方式（可联系标注 + 脱敏展示） */
 .fb-contact-line { font-size: 12px; color: var(--text-dim); margin-top: 4px; word-break: break-all; }
 .fb-contact-line:first-of-type { margin-top: 6px; }
+/* v70：邮箱复制按钮（复制完整未脱敏邮箱），展示仍保持脱敏 */
+.fb-copy-btn { margin-left: 6px; padding: 2px 8px; font-size: 11.5px; line-height: 16px; vertical-align: middle; }
+.fb-copy-btn.ok { color: #1f9d6b; border-color: rgba(31, 157, 107, .55); }
+.fb-copy-btn.err { color: #d9534f; border-color: rgba(217, 83, 79, .55); }
 .op-btn {
   border: none;
   background: transparent;
@@ -2657,6 +2661,65 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   }
   function fbHasContact(f) { return !!(f && ((f.phone && String(f.phone).trim()) || (f.email && String(f.email).trim()))); }
 
+  /* ===== v70：邮箱复制（复制完整未脱敏邮箱；页面展示仍脱敏） ===== */
+  /** 完整（未脱敏）邮箱：后台 reveal=1 时接口附带的 emailFull 优先；缺失则回退记录自身的 email（本地留底即完整值） */
+  function fbEmailFull(f) {
+    if (!f) return '';
+    var full = (f.emailFull != null) ? String(f.emailFull).trim() : '';
+    if (full) return full;
+    var raw = (f.email != null) ? String(f.email).trim() : '';
+    if (!raw) return '';
+    if (raw.indexOf('*') >= 0) return ''; // 已是脱敏串，不作为完整邮箱复制
+    return raw;
+  }
+  /** 记录是否填写过邮箱（决定是否渲染复制按钮） */
+  function fbHasEmail(f) {
+    if (!f) return false;
+    var a = (f.email != null) ? String(f.email).trim() : '';
+    var b = (f.emailFull != null) ? String(f.emailFull).trim() : '';
+    return !!(a || b);
+  }
+  /** 复制按钮的「已复制 / 复制失败」反馈：1.6s 后复原为「复制」 */
+  function fbCopyEmailFlash(btn, ok) {
+    if (!btn) return;
+    if (btn._fbFlashTimer) { clearTimeout(btn._fbFlashTimer); btn._fbFlashTimer = null; }
+    btn.textContent = ok ? '已复制' : '复制失败';
+    if (ok) { btn.classList.add('ok'); btn.classList.remove('err'); }
+    else { btn.classList.add('err'); btn.classList.remove('ok'); }
+    btn._fbFlashTimer = setTimeout(function () {
+      btn.textContent = '复制';
+      btn.classList.remove('ok');
+      btn.classList.remove('err');
+      btn._fbFlashTimer = null;
+    }, 1600);
+  }
+  /** 邮箱旁的「复制」按钮：点击复制完整未脱敏邮箱到剪贴板（未填写邮箱时不渲染） */
+  function fbCopyEmailBtn(f) {
+    if (!fbHasEmail(f)) return null;
+    var full = fbEmailFull(f);
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-sm btn-ghost fb-copy-btn';
+    btn.textContent = '复制';
+    btn.title = full ? '复制完整邮箱（不脱敏）' : '完整邮箱暂不可用，请刷新反馈数据后重试';
+    btn.setAttribute('aria-label', '复制完整邮箱到剪贴板');
+    btn.onclick = function (ev) {
+      if (ev && ev.stopPropagation) ev.stopPropagation();
+      if (ev && ev.preventDefault) ev.preventDefault();
+      if (!full) { fbCopyEmailFlash(btn, false); return; }
+      function done() { fbCopyEmailFlash(btn, true); }
+      function fallback() { if (legacyCopyText(full)) { done(); } else { fbCopyEmailFlash(btn, false); } }
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(full).then(done).catch(fallback);
+          return;
+        }
+      } catch (e) { /* 剪贴板 API 不可用 → 走兜底 */ }
+      fallback();
+    };
+    return btn;
+  }
+
   /* ===== v68：姓名 / 姓氏自动推导 / 按月聚合 ===== */
   /** 常见复姓（两字），姓氏推导时优先匹配 */
   var FB_COMPOUND_SURNAMES = ['欧阳', '太史', '端木', '上官', '司马', '东方', '独孤', '南宫', '万俟', '闻人', '夏侯', '诸葛', '尉迟', '公羊', '赫连', '澹台', '皇甫', '宗政', '濮阳', '公冶', '太叔', '申屠', '公孙', '慕容', '仲孙', '钟离', '长孙', '宇文', '司徒', '鲜于', '司空', '闾丘', '子车', '亓官', '司寇', '巫马', '公西', '颛孙', '壤驷', '公良', '漆雕', '乐正', '宰父', '谷梁', '拓跋', '夹谷', '轩辕', '令狐', '段干', '百里', '呼延', '东郭', '南门', '羊舌', '微生', '公户', '公玉', '公仪', '梁丘', '公仲', '公上', '公门', '公山', '公坚', '左丘', '公伯', '西门', '公祖', '第五', '公乘', '贯丘', '公皙', '南荣', '东里', '东宫', '仲长', '子书', '子桑', '即墨', '达奚', '褚师'];
@@ -2757,6 +2820,8 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       var m = document.createElement('div');
       m.className = 'fb-contact-line';
       m.textContent = '邮箱 ' + maskEmail(email);
+      var mCopy = fbCopyEmailBtn(f); // v70：复制完整未脱敏邮箱（展示仍脱敏）
+      if (mCopy) m.appendChild(mCopy);
       td.appendChild(m);
     }
     return td;
@@ -2777,6 +2842,8 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       name: String(it.name || ''),
       phone: String(it.phone || ''),
       email: String(it.email || ''),
+      // v70：reveal=1 时接口额外返回完整邮箱，供「复制」按钮使用（展示仍走脱敏 email）
+      emailFull: String(it.emailFull || ''),
       notifyStatus: String(it.notifyStatus || it.notify_status || ''),
       remote: true
     };
@@ -2798,6 +2865,8 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
         if (rec.name) hit.name = rec.name;
         if (rec.phone) hit.phone = rec.phone;
         if (rec.email) hit.email = rec.email;
+        // v70：保留服务端返回的完整邮箱（仅用于「复制」，不参与脱敏展示）
+        if (rec.emailFull) hit.emailFull = rec.emailFull;
         if (!hit.createdAt) hit.createdAt = rec.createdAt;
         hit.notifyStatus = rec.notifyStatus;
         hit.remote = true;
@@ -2816,7 +2885,8 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     if (Date.now() - FB_REMOTE_STATE.lastTry < 60000) return;
     FB_REMOTE_STATE.loading = true;
     FB_REMOTE_STATE.lastTry = Date.now();
-    recRequest('/api/feedback?limit=200').then(function (data) {
+    // v70：reveal=1 → 管理员会话下额外返回 emailFull（完整邮箱），仅用于「复制」按钮
+    recRequest('/api/feedback?limit=200&reveal=1').then(function (data) {
       var items = recExtractList(data, ['items', 'data', 'list', 'feedbacks']);
       var added = mergeRemoteFeedbacks(items);
       FB_REMOTE_STATE.loaded = true;
@@ -2874,7 +2944,8 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     if ((f.name || '').trim()) meta2.push('<span>姓名：' + esc(f.name) + '（姓氏：' + esc(fbSurname(f.name)) + '）</span>');
     if (fbHasContact(f)) {
       if ((f.phone || '').trim()) meta2.push('<span>手机号：' + esc(maskPhone(f.phone)) + '</span>');
-      if ((f.email || '').trim()) meta2.push('<span>邮箱：' + esc(maskEmail(f.email)) + '</span>');
+      // v70：邮箱旁留出「复制」按钮挂载点（展示仍脱敏）
+      if ((f.email || '').trim()) meta2.push('<span>邮箱：' + esc(maskEmail(f.email)) + '<span id="fbEmailCopySlot"></span></span>');
     }
     if (meta2.length) html.push('<div class="fb-detail-meta">' + meta2.join('') + '</div>');
     html.push('<div class="fb-detail-block"><div class="fb-detail-label">反馈内容</div><div class="fb-detail-content">' + esc(f.content || '（无内容）') + '</div></div>');
@@ -2891,6 +2962,12 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     }
     html.push('<div class="fb-detail-block"><div class="fb-detail-label">处理进度</div><div class="fb-timeline">' + tl.join('') + '</div></div>');
     body.innerHTML = html.join('');
+    // v70：把「复制完整邮箱」按钮挂到详情弹窗的邮箱旁
+    var emailSlot = $('fbEmailCopySlot');
+    if (emailSlot) {
+      var emailCopy = fbCopyEmailBtn(f);
+      if (emailCopy) emailSlot.appendChild(emailCopy);
+    }
     modal.classList.remove('hidden');
   }
   function fbCloseDetail() {
@@ -3034,6 +3111,9 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       ph.textContent = (f.phone && String(f.phone).trim()) ? maskPhone(f.phone) : '';
       var em = document.createElement('td');
       em.textContent = (f.email && String(f.email).trim()) ? maskEmail(f.email) : '';
+      // v70：邮箱旁加「复制」按钮（复制完整未脱敏邮箱；无邮箱则不加）
+      var emCopy = fbCopyEmailBtn(f);
+      if (emCopy) em.appendChild(emCopy);
       var ty = document.createElement('td');
       var span = document.createElement('span');
       span.className = 'type-tag'; span.textContent = f.type;

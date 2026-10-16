@@ -29,11 +29,11 @@ const SUMMARY_MIN_LEN = 15; // 简介最短有效长度
  * 若某个源失效，直接替换或追加更稳定的 RSS 地址即可。
  */
 const SOURCES = [
-  { name: '中国民航网', url: 'http://www.caacnews.com.cn/rss.xml' },
-  { name: '民航资源网', url: 'https://www.carnoc.com/rss/news.xml' },
+  { name: 'Aviation Week', url: 'https://www.aviationweek.com/rss.xml' },
+  { name: 'AeroTime', url: 'https://www.aerotime.aero/feed' },
   {
-    name: 'Google News 民航',
-    url: 'https://news.google.com/rss/search?q=%E6%B0%91%E8%88%AA%E5%AE%A2%E6%9C%BA&hl=zh-CN&gl=CN&ceid=CN:zh-Hans'
+    name: '中国民航网',
+    url: 'http://www.caacnews.com.cn/'
   }
 ];
 

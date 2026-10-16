@@ -36,13 +36,13 @@ const SOURCE_RETRIES = 2; // 单源尝试次数（1 次 + 1 次重试）
 const RETRY_DELAY_MS = 600; // 重试前退避
 
 /** 快讯源列表：并行尝试，各自独立超时与重试（与 worker/news-cron.js 保持一致） */
+/* v-fix1016：原三源（中国民航网 rss.xml / 民航资源网 / Google News）实测 404 / 000 失效，
+ * 替换为实测 200 可抓取的 Aviation Week RSS 与 AeroTime Atom feed；
+ * 中国民航网保留为 HTML 首页标题链接抓取（kind: 'html'），由 parseHtmlLinks 解析。 */
 const SOURCES = [
-  { name: '中国民航网', url: 'http://www.caacnews.com.cn/rss.xml' },
-  { name: '民航资源网', url: 'https://www.carnoc.com/rss/news.xml' },
-  {
-    name: 'Google News 民航',
-    url: 'https://news.google.com/rss/search?q=%E6%B0%91%E8%88%AA%E5%AE%A2%E6%9C%BA&hl=zh-CN&gl=CN&ceid=CN:zh-Hans'
-  }
+  { name: 'Aviation Week', url: 'https://www.aviationweek.com/rss.xml', kind: 'rss' },
+  { name: 'AeroTime', url: 'https://www.aerotime.aero/feed', kind: 'rss' },
+  { name: '中国民航网', url: 'http://www.caacnews.com.cn/', kind: 'html' }
 ];
 
 function ymd() {
@@ -228,6 +228,43 @@ function parseFeed(xml) {
   return items;
 }
 
+/**
+ * HTML 列表解析（v-fix1016 新增，供中国民航网首页 kind:'html' 源使用）：
+ * 抓取首页 <a> 标题链接，相对路径按页面基址补全为绝对 URL；
+ * 过滤站内导航 / 空文本 / 非本站外链，按标题去重。
+ */
+const HTML_TITLE_MIN = 6; // 标题文本最短长度，过滤导航/短标签
+
+function parseHtmlLinks(htmlText, pageUrl) {
+  const items = [];
+  const text = String(htmlText || '');
+  const seen = new Set();
+  const re = /<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    if (items.length >= MAX_ITEMS_PER_SOURCE) break;
+    const href = decodeEntities(m[1]).trim();
+    const rawTitle = stripTags(decodeEntities(m[2])).replace(/\s+/g, ' ').trim();
+    if (!href || !rawTitle) continue;
+    const title = rawTitle.slice(0, 160);
+    if (title.length < HTML_TITLE_MIN) continue;
+    let url = '';
+    try {
+      url = new URL(href, pageUrl).href;
+    } catch (e) {
+      continue;
+    }
+    if (!/^https?:\/\//i.test(url)) continue;
+    // 跳过明显的非新闻链接（登录/分享/站点导航等）
+    if (/login|logout|register|javascript:|#|share|sitemap|rss/i.test(url) && !/\.(?:html?|shtml)$/i.test(url)) continue;
+    const key = url.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push({ title: title, url: url, time: '', snippet: '' });
+  }
+  return items;
+}
+
 /** 单次抓取（带超时） */
 async function fetchOnce(url, ms) {
   const ctrl = new AbortController();
@@ -255,8 +292,10 @@ async function fetchSource(src) {
     try {
       const res = await fetchOnce(src.url, SRC_TIMEOUT_MS);
       if (!res.ok) throw new Error('HTTP ' + res.status);
-      const xml = await res.text();
-      const items = parseFeed(xml);
+      const body = await res.text();
+      const items = src.kind === 'html'
+        ? parseHtmlLinks(body, src.url)
+        : parseFeed(body);
       if (!items.length) throw new Error('解析结果为空');
       return { name: src.name, url: src.url, ok: true, count: items.length, attempts: attempt, error: '', items: items };
     } catch (e) {

@@ -1115,7 +1115,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       <a href="#" class="nav-item" data-page="feedbacks" data-role="owner,admin">反馈管理</a>
       <a href="#" class="nav-item with-ic" data-page="recommendations" data-role="owner,admin"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.7 5.7 6.3 0.9-4.6 4.4 1.1 6.2L12 17.3 6.5 20.2l1.1-6.2L3 9.6l6.3-0.9L12 3z"/></svg>推荐机型</a>
       <a href="#" class="nav-item" data-page="notices" data-role="owner,admin">公告管理</a>
-      <a href="#" class="nav-item with-ic" data-page="usercontrol" data-role="owner,admin"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l2.4 2.4L17 4l.6 2.6L20 9l-1 3 1 3-2.4 2.4L17 20l-2.6-.6L12 22l-2.4-2.4L7 20l-.6-2.6L4 15l1-3-1-3 2.4-2.4L7 4l2.6.6L12 2z"/><path d="M9 12l2 2 4-4"/></svg>访客协助台<span id="ucAppealDot" class="nav-dot hidden"></span></a>
+      <a href="#" class="nav-item with-ic" data-page="usercontrol" data-role="owner,admin"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l2.4 2.4L17 4l.6 2.6L20 9l-1 3 1 3-2.4 2.4L17 20l-2.6-.6L12 22l-2.4-2.4L7 20l-.6-2.6L4 15l1-3-1-3 2.4-2.4L7 4l2.6.6L12 2z"/><path d="M9 12l2 2 4-4"/></svg>航站服务台<span id="ucAppealDot" class="nav-dot hidden"></span></a>
       <a href="#" class="nav-item" data-page="trash" data-role="owner,admin">回收站</a>
       <a href="#" class="nav-item" data-page="sites" data-role="owner">站点管理</a>
       <a href="#" class="nav-item" data-page="ops" data-role="owner,admin">运营选题</a>
@@ -1420,19 +1420,37 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
         </div>
       </section>
 
-      <!-- 访客协助台 -->
+      <!-- 航站服务台 -->
       <section id="page-usercontrol" class="page hidden">
         <div class="toolbar">
           <div>
-            <div class="toolbar-title">访客协助台</div>
+            <div class="toolbar-title">航站服务台</div>
             <p class="sub-note">面向访问主站的所有访客：可查看访问次数与活跃情况，按单个用户 / 特定区域 / 全体用户设定「协助范围」；受限访客在前台会收到委婉提示，并可提交「协助申请」自助解除，本页可直接审核。命名刻意避开直白措辞，仅后台内部可见。</p>
           </div>
           <div class="toolbar-right">
+            <button id="ucTokenBtn" class="btn btn-ghost">主站令牌</button>
             <button id="ucRefreshBtn" class="btn btn-ghost">刷新数据</button>
             <button id="ucAddRuleBtn" class="btn btn-primary">新增协助范围</button>
           </div>
         </div>
         <div id="ucStatus" class="list-status"></div>
+
+        <div class="uc-stat-row">
+          <div class="uc-stat-card"><div class="uc-stat-num" id="ucStatVisitors">0</div><div class="uc-stat-label">访客总数</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="ucStatRestricted">0</div><div class="uc-stat-label">受限访客</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="ucStatAppeals">0</div><div class="uc-stat-label">待处理申请</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="ucStatRules">0</div><div class="uc-stat-label">协助范围</div></div>
+        </div>
+
+        <div id="ucTokenWrap" class="hidden uc-token-wrap">
+          <div class="toolbar-title" style="font-size:14px;margin-bottom:10px">主站管理令牌</div>
+          <p class="sub-note" style="margin-bottom:10px">航站服务台的数据来自主站接口（henry126923.pages.dev），需要在下方填入主站的管理令牌（主站 Cloudflare 环境变量 ADMIN_TOKEN 的值）。填错或留空时本页会显示「连接失败」。</p>
+          <div class="settings-row">
+            <input type="password" id="ucTokenInput" class="input" style="width:320px" placeholder="粘贴主站管理令牌" autocomplete="off">
+            <button id="ucTokenSave" class="btn btn-primary">保存并重连</button>
+            <button id="ucTokenCancel" class="btn btn-ghost">取消</button>
+          </div>
+        </div>
 
         <div class="table-card">
           <div class="toolbar-title" style="font-size:14px">协助申请（<span id="ucAppealCount">0</span> 条待处理）</div>
@@ -1922,7 +1940,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     for (var j = 0; j < navs.length; j++) {
       navs[j].classList.toggle('active', navs[j].getAttribute('data-page') === name);
     }
-    var titles = { dashboard: '数据看板', feedbacks: '反馈管理', recommendations: '推荐机型', ops: '运营选题', notices: '公告管理', usercontrol: '访客协助台', trash: '回收站', sites: '站点管理', settings: '系统设置' };
+    var titles = { dashboard: '数据看板', feedbacks: '反馈管理', recommendations: '推荐机型', ops: '运营选题', notices: '公告管理', usercontrol: '航站服务台', trash: '回收站', sites: '站点管理', settings: '系统设置' };
     $('pageTitle').textContent = titles[name] || '';
     if (name === 'dashboard') { loadStats(); renderTrend(); renderRecent(); renderNotes(); refreshLivePanels(); }
     if (name === 'feedbacks') loadFeedbacks();
@@ -1946,7 +1964,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   function ucRequest(action, opts) {
     opts = opts || {};
     var headers = { 'Accept': 'application/json' };
-    var spareToken = recApiToken();
+    var spareToken = (db && db.settings && db.settings.ucMainToken) ? String(db.settings.ucMainToken) : recApiToken();
     if (spareToken) headers['X-Admin-Token'] = spareToken;
     if (opts.body) headers['Content-Type'] = 'application/json';
     var init = { method: opts.method || 'GET', headers: headers, credentials: 'include' };
@@ -1963,20 +1981,37 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       });
     });
   }
+  function ucFillStats(visitors, restrictions, appeals) {
+    var vArr = (visitors && visitors.visitors) || [];
+    var restricted = 0;
+    for (var i = 0; i < vArr.length; i++) if (vArr[i].restricted) restricted++;
+    var rArr = restrictions || [];
+    var aArr = appeals || [];
+    var pending = 0;
+    for (var j = 0; j < aArr.length; j++) if (aArr[j].status === 'pending') pending++;
+    var s1 = $('ucStatVisitors'); if (s1) s1.textContent = vArr.length;
+    var s2 = $('ucStatRestricted'); if (s2) s2.textContent = restricted;
+    var s3 = $('ucStatAppeals'); if (s3) s3.textContent = pending;
+    var s4 = $('ucStatRules'); if (s4) s4.textContent = rArr.length;
+  }
   function loadUserControl() {
-    ucStatus('正在加载访客协助台…');
+    ucStatus('正在加载航站服务台数据…');
     Promise.all([
       ucRequest('list-visitors', { method: 'GET' }),
       ucRequest('list-restrictions', { method: 'GET' }),
       ucRequest('list-appeals', { method: 'GET' })
     ]).then(function (rs) {
-      ucStatus('已更新：' + new Date().toLocaleTimeString());
+      ucStatus('已更新：' + new Date().toLocaleTimeString() + '（主站接口正常）');
+      ucFillStats(rs[0] || { visitors: [] }, (rs[1] && rs[1].restrictions) || [], (rs[2] && rs[2].appeals) || []);
       renderUcVisitors(rs[0] || { visitors: [] });
       renderUcRules((rs[1] && rs[1].restrictions) || []);
       renderUcAppeals((rs[2] && rs[2].appeals) || []);
       updateUcAppealDot();
     }).catch(function (err) {
-      ucStatus('加载失败：' + (err && err.message ? err.message : '未知错误') + '（请确认主站「访客协助台」接口可访问）');
+      var st = err && err.status;
+      var hint = '（请确认主站接口可访问）';
+      if (st === 401 || st === 403) hint = '（主站管理令牌缺失或无效，请点击右上角「主站令牌」配置后重试）';
+      ucStatus('连接失败：' + (err && err.message ? err.message : '未知错误') + hint);
     });
   }
   function updateUcAppealDot() {
@@ -2097,6 +2132,25 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   }
   function initUserControl() {
     var rb = $('ucRefreshBtn'); if (rb) rb.addEventListener('click', loadUserControl);
+    var tb = $('ucTokenBtn');
+    if (tb) tb.addEventListener('click', function () {
+      var wrap = $('ucTokenWrap');
+      wrap.classList.toggle('hidden');
+      var inp = $('ucTokenInput');
+      if (!wrap.classList.contains('hidden') && inp) inp.value = (db && db.settings && db.settings.ucMainToken) ? String(db.settings.ucMainToken) : '';
+    });
+    var tSave = $('ucTokenSave');
+    if (tSave) tSave.addEventListener('click', function () {
+      var inp = $('ucTokenInput');
+      var val = inp ? inp.value.trim() : '';
+      db.settings.ucMainToken = val;
+      saveDB();
+      $('ucTokenWrap').classList.add('hidden');
+      ucStatus('令牌已保存，正在重连…');
+      loadUserControl();
+    });
+    var tCancel = $('ucTokenCancel');
+    if (tCancel) tCancel.addEventListener('click', function () { $('ucTokenWrap').classList.add('hidden'); });
     var ab = $('ucAddRuleBtn');
     if (ab) ab.addEventListener('click', function () { $('ucAddWrap').classList.remove('hidden'); });
     var cancel = $('ucRuleCancel');

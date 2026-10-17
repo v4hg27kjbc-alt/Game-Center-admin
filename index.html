@@ -894,6 +894,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
 .hint-note { color: var(--text-dim); }
 .nav-item.with-ic { display: flex; align-items: center; gap: 8px; }
 .nav-item.with-ic svg { flex-shrink: 0; }
+.nav-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ff5d5d; box-shadow: 0 0 0 3px rgba(255, 93, 93, .18); margin-left: 4px; }
 .ops-stats { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
 .ops-stat { flex: 1 1 180px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 10px 12px; }
 .ops-stat-num { font-size: 20px; font-weight: 700; color: #fff; }
@@ -1114,6 +1115,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       <a href="#" class="nav-item" data-page="feedbacks" data-role="owner,admin">反馈管理</a>
       <a href="#" class="nav-item with-ic" data-page="recommendations" data-role="owner,admin"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.7 5.7 6.3 0.9-4.6 4.4 1.1 6.2L12 17.3 6.5 20.2l1.1-6.2L3 9.6l6.3-0.9L12 3z"/></svg>推荐机型</a>
       <a href="#" class="nav-item" data-page="notices" data-role="owner,admin">公告管理</a>
+      <a href="#" class="nav-item with-ic" data-page="usercontrol" data-role="owner,admin"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l2.4 2.4L17 4l.6 2.6L20 9l-1 3 1 3-2.4 2.4L17 20l-2.6-.6L12 22l-2.4-2.4L7 20l-.6-2.6L4 15l1-3-1-3 2.4-2.4L7 4l2.6.6L12 2z"/><path d="M9 12l2 2 4-4"/></svg>访客协助台<span id="ucAppealDot" class="nav-dot hidden"></span></a>
       <a href="#" class="nav-item" data-page="trash" data-role="owner,admin">回收站</a>
       <a href="#" class="nav-item" data-page="sites" data-role="owner">站点管理</a>
       <a href="#" class="nav-item" data-page="ops" data-role="owner,admin">运营选题</a>
@@ -1415,6 +1417,62 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
             <tbody id="trashTbody"></tbody>
           </table>
           <p id="trashEmpty" class="empty hidden">回收站是空的</p>
+        </div>
+      </section>
+
+      <!-- 访客协助台 -->
+      <section id="page-usercontrol" class="page hidden">
+        <div class="toolbar">
+          <div>
+            <div class="toolbar-title">访客协助台</div>
+            <p class="sub-note">面向访问主站的所有访客：可查看访问次数与活跃情况，按单个用户 / 特定区域 / 全体用户设定「协助范围」；受限访客在前台会收到委婉提示，并可提交「协助申请」自助解除，本页可直接审核。命名刻意避开直白措辞，仅后台内部可见。</p>
+          </div>
+          <div class="toolbar-right">
+            <button id="ucRefreshBtn" class="btn btn-ghost">刷新数据</button>
+            <button id="ucAddRuleBtn" class="btn btn-primary">新增协助范围</button>
+          </div>
+        </div>
+        <div id="ucStatus" class="list-status"></div>
+
+        <div class="table-card">
+          <div class="toolbar-title" style="font-size:14px">协助申请（<span id="ucAppealCount">0</span> 条待处理）</div>
+          <table class="table">
+            <thead><tr><th>申请时间</th><th>访客</th><th>问题</th><th>说明</th><th>联系方式</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody id="ucAppealTbody"></tbody>
+          </table>
+          <p id="ucAppealEmpty" class="empty hidden">暂无协助申请</p>
+        </div>
+
+        <div class="table-card">
+          <div class="toolbar-title" style="font-size:14px">已设协助范围</div>
+          <table class="table">
+            <thead><tr><th>范围</th><th>目标</th><th>说明</th><th>设定时间</th><th>操作</th></tr></thead>
+            <tbody id="ucRuleTbody"></tbody>
+          </table>
+          <p id="ucRuleEmpty" class="empty hidden">尚未设置任何协助范围</p>
+        </div>
+
+        <div class="table-card">
+          <div class="toolbar-title" style="font-size:14px">访客概览（按最近访问排序）</div>
+          <table class="table">
+            <thead><tr><th>访客</th><th>最近访问</th><th>访问次数</th><th>地区</th><th>受限</th><th>操作</th></tr></thead>
+            <tbody id="ucVisitorTbody"></tbody>
+          </table>
+          <p id="ucVisitorEmpty" class="empty hidden">暂无访客数据，等主站有访问后自动出现</p>
+        </div>
+
+        <div id="ucAddWrap" class="hidden" style="margin-top:14px;padding:14px;border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(255,255,255,.04)">
+          <div class="toolbar-title" style="font-size:14px;margin-bottom:10px">新增协助范围</div>
+          <select id="ucRuleType" style="margin-right:8px">
+            <option value="country">国家 / 地区（如 CN、US）</option>
+            <option value="ipprefix">市级小区网段（如 113.108.0.0/16 或 113.108.12.0/22）</option>
+            <option value="user">单个访客（粘贴访客 ID）</option>
+            <option value="global">全体访客</option>
+          </select>
+          <input type="text" id="ucRuleValue" class="input" style="width:220px" placeholder="目标值，如 CN / 113.108.0.0/16 / 访客ID">
+          <input type="text" id="ucRuleNote" class="input" style="width:220px" placeholder="说明（选填）">
+          <button id="ucRuleSubmit" class="btn btn-primary">确认设定</button>
+          <button id="ucRuleCancel" class="btn btn-ghost">取消</button>
         </div>
       </section>
 
@@ -1856,7 +1914,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   function switchPage(name) {
     // 敏感面板前置身份验证（登录密码）
     if (typeof requireGate === 'function' && !requireGate(name)) return;
-    var pages = ['dashboard', 'feedbacks', 'recommendations', 'ops', 'notices', 'trash', 'sites', 'settings'];
+    var pages = ['dashboard', 'feedbacks', 'recommendations', 'ops', 'notices', 'usercontrol', 'trash', 'sites', 'settings'];
     for (var i = 0; i < pages.length; i++) {
       $('page-' + pages[i]).classList.toggle('hidden', pages[i] !== name);
     }
@@ -1864,16 +1922,197 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     for (var j = 0; j < navs.length; j++) {
       navs[j].classList.toggle('active', navs[j].getAttribute('data-page') === name);
     }
-    var titles = { dashboard: '数据看板', feedbacks: '反馈管理', recommendations: '推荐机型', ops: '运营选题', notices: '公告管理', trash: '回收站', sites: '站点管理', settings: '系统设置' };
+    var titles = { dashboard: '数据看板', feedbacks: '反馈管理', recommendations: '推荐机型', ops: '运营选题', notices: '公告管理', usercontrol: '访客协助台', trash: '回收站', sites: '站点管理', settings: '系统设置' };
     $('pageTitle').textContent = titles[name] || '';
     if (name === 'dashboard') { loadStats(); renderTrend(); renderRecent(); renderNotes(); refreshLivePanels(); }
     if (name === 'feedbacks') loadFeedbacks();
     if (name === 'recommendations') loadRecommendations(false);
     if (name === 'ops') loadOpsTopics();
     if (name === 'notices') loadAnnouncements(false);
+    if (name === 'usercontrol') loadUserControl();
     if (name === 'trash') renderTrash();
     if (name === 'sites') renderSites();
     if (name === 'settings') renderSettings();
+  }
+
+  // ===== 访客协助台 =====
+  function ucBase() {
+    return (db && db.settings && db.settings.ucApiBase) ? String(db.settings.ucApiBase).replace(/\/+$/, '') : 'https://henry126923.pages.dev';
+  }
+  function ucStatus(msg) {
+    var el = $('ucStatus');
+    if (el) el.textContent = msg;
+  }
+  function ucRequest(action, opts) {
+    opts = opts || {};
+    var headers = { 'Accept': 'application/json' };
+    var spareToken = recApiToken();
+    if (spareToken) headers['X-Admin-Token'] = spareToken;
+    if (opts.body) headers['Content-Type'] = 'application/json';
+    var init = { method: opts.method || 'GET', headers: headers, credentials: 'include' };
+    if (opts.body) init.body = JSON.stringify(opts.body);
+    if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) init.signal = AbortSignal.timeout(15000);
+    return fetch(ucBase() + '/api/admin/control?action=' + encodeURIComponent(action), init).then(function (res) {
+      return res.json().then(function (d) {
+        if (!res.ok) {
+          var err = new Error((d && d.message) || ('HTTP ' + res.status));
+          err.status = res.status;
+          throw err;
+        }
+        return d;
+      });
+    });
+  }
+  function loadUserControl() {
+    ucStatus('正在加载访客协助台…');
+    Promise.all([
+      ucRequest('list-visitors', { method: 'GET' }),
+      ucRequest('list-restrictions', { method: 'GET' }),
+      ucRequest('list-appeals', { method: 'GET' })
+    ]).then(function (rs) {
+      ucStatus('已更新：' + new Date().toLocaleTimeString());
+      renderUcVisitors(rs[0] || { visitors: [] });
+      renderUcRules((rs[1] && rs[1].restrictions) || []);
+      renderUcAppeals((rs[2] && rs[2].appeals) || []);
+      updateUcAppealDot();
+    }).catch(function (err) {
+      ucStatus('加载失败：' + (err && err.message ? err.message : '未知错误') + '（请确认主站「访客协助台」接口可访问）');
+    });
+  }
+  function updateUcAppealDot() {
+    var el = $('ucAppealDot');
+    if (!el) return;
+    var pending = 0;
+    var trs = document.querySelectorAll('#ucAppealTbody tr[data-status="pending"]');
+    for (var i = 0; i < trs.length; i++) pending++;
+    var cnt = $('ucAppealCount');
+    if (cnt) cnt.textContent = pending;
+    el.classList.toggle('hidden', pending === 0);
+  }
+  function ucFmtHash(h) {
+    var s = String(h || '');
+    return s.length > 10 ? s.slice(0, 8) + '…' : (s || '—');
+  }
+  function renderUcVisitors(data) {
+    var rows = data.visitors || [];
+    var tbody = $('ucVisitorTbody');
+    tbody.innerHTML = '';
+    $('ucVisitorEmpty').classList.toggle('hidden', rows.length > 0);
+    rows.forEach(function (v) {
+      var tr = document.createElement('tr');
+      var c1 = document.createElement('td'); c1.textContent = ucFmtHash(v.hash); c1.style.fontFamily = 'monospace';
+      var c2 = document.createElement('td'); c2.textContent = recFmtTime(v.lastVisit);
+      var c3 = document.createElement('td'); c3.textContent = v.visits;
+      var c4 = document.createElement('td'); c4.textContent = (v.country ? v.country : '未知') + (v.ipPrefix ? ' · ' + v.ipPrefix : '');
+      var c5 = document.createElement('td');
+      c5.textContent = v.restricted ? (v.level === 1 ? '受限（用户）' : v.level === 3 ? '受限（全体）' : '受限') : '正常';
+      c5.style.color = v.restricted ? '#ff9d6c' : '#7ee0a3';
+      var c6 = document.createElement('td');
+      var b = document.createElement('button');
+      b.className = 'btn btn-ghost'; b.style.padding = '3px 10px'; b.style.fontSize = '12px';
+      b.textContent = v.restricted ? '解除限制' : '限制此访客';
+      b.addEventListener('click', function () {
+        if (v.restricted) ucUnrestrict('user', v.hash);
+        else ucRestrict('user', v.hash);
+      });
+      c6.appendChild(b);
+      tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c3); tr.appendChild(c4); tr.appendChild(c5); tr.appendChild(c6);
+      tbody.appendChild(tr);
+    });
+  }
+  function renderUcRules(rules) {
+    var tbody = $('ucRuleTbody');
+    tbody.innerHTML = '';
+    $('ucRuleEmpty').classList.toggle('hidden', rules.length > 0);
+    rules.slice().sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); }).forEach(function (r) {
+      var tr = document.createElement('tr');
+      var c1 = document.createElement('td');
+      var scopeName = { user: '单个访客', country: '国家/地区', ipprefix: '市级小区网段', global: '全体访客' }[r.scope] || r.scope;
+      c1.textContent = scopeName;
+      var c2 = document.createElement('td'); c2.textContent = (r.scope === 'global' ? '（全部）' : r.target); c2.style.fontFamily = 'monospace';
+      var c3 = document.createElement('td'); c3.textContent = r.note || r.reason || '';
+      var c4 = document.createElement('td'); c4.textContent = recFmtTime(r.createdAt);
+      var c5 = document.createElement('td');
+      var b = document.createElement('button');
+      b.className = 'btn btn-ghost'; b.style.padding = '3px 10px'; b.style.fontSize = '12px';
+      b.textContent = '解除';
+      b.addEventListener('click', function () { ucUnrestrict(r.scope, r.target); });
+      c5.appendChild(b);
+      tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c3); tr.appendChild(c4); tr.appendChild(c5);
+      tbody.appendChild(tr);
+    });
+  }
+  function renderUcAppeals(appeals) {
+    var tbody = $('ucAppealTbody');
+    tbody.innerHTML = '';
+    $('ucAppealEmpty').classList.toggle('hidden', appeals.length > 0);
+    appeals.forEach(function (a) {
+      var tr = document.createElement('tr');
+      tr.setAttribute('data-status', a.status);
+      var c1 = document.createElement('td'); c1.textContent = recFmtTime(a.createdAt);
+      var c2 = document.createElement('td'); c2.textContent = ucFmtHash(a.visitorHash); c2.style.fontFamily = 'monospace';
+      var c3 = document.createElement('td'); c3.textContent = a.q || '';
+      var c4 = document.createElement('td'); c4.textContent = a.note || '';
+      var c5 = document.createElement('td'); c5.textContent = a.contact || '';
+      var c6 = document.createElement('td');
+      c6.textContent = a.status === 'pending' ? '待处理' : a.status === 'granted' ? '已通过' : '已驳回';
+      c6.style.color = a.status === 'pending' ? '#ffd166' : a.status === 'granted' ? '#7ee0a3' : '#9aa3c0';
+      var c7 = document.createElement('td');
+      if (a.status === 'pending') {
+        var b1 = document.createElement('button');
+        b1.className = 'btn btn-primary'; b1.style.padding = '3px 10px'; b1.style.fontSize = '12px'; b1.style.marginRight = '6px';
+        b1.textContent = '通过并解除';
+        b1.addEventListener('click', function () { ucResolveAppeal(a.id, 'granted'); });
+        var b2 = document.createElement('button');
+        b2.className = 'btn btn-ghost'; b2.style.padding = '3px 10px'; b2.style.fontSize = '12px';
+        b2.textContent = '驳回';
+        b2.addEventListener('click', function () { ucResolveAppeal(a.id, 'denied'); });
+        c7.appendChild(b1); c7.appendChild(b2);
+      } else {
+        c7.textContent = '—';
+      }
+      tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c3); tr.appendChild(c4); tr.appendChild(c5); tr.appendChild(c6); tr.appendChild(c7);
+      tbody.appendChild(tr);
+    });
+  }
+  function ucRestrict(scope, target) {
+    if (scope === 'user' && !target) { alert('缺少访客标识'); return; }
+    if (scope === 'country' && !target) { alert('请填写国家/地区码，如 CN'); return; }
+    if (scope === 'ipprefix' && !target) { alert('请填写市级小区网段前缀，如 113.108.0.0/16 或 113.108.12.0/22'); return; }
+    var note = scope === 'global' ? '' : (window.prompt('填写受限说明（后台提示用，选填）', '') || '');
+    ucRequest('restrict', { method: 'POST', body: { scope: scope, target: target || '', note: note } })
+      .then(function () { ucStatus('已设定协助范围'); loadUserControl(); })
+      .catch(function (err) { ucStatus('操作失败：' + (err && err.message ? err.message : '未知错误')); });
+  }
+  function ucUnrestrict(scope, target) {
+    if (!window.confirm('确认解除该协助范围？')) return;
+    ucRequest('unrestrict', { method: 'POST', body: { scope: scope, target: target || '' } })
+      .then(function () { ucStatus('已解除'); loadUserControl(); })
+      .catch(function (err) { ucStatus('操作失败：' + (err && err.message ? err.message : '未知错误')); });
+  }
+  function ucResolveAppeal(id, action) {
+    ucRequest('resolve-appeal', { method: 'POST', body: { id: id, action: action } })
+      .then(function () { ucStatus(action === 'granted' ? '已通过并解除受限' : '已驳回'); loadUserControl(); })
+      .catch(function (err) { ucStatus('操作失败：' + (err && err.message ? err.message : '未知错误')); });
+  }
+  function initUserControl() {
+    var rb = $('ucRefreshBtn'); if (rb) rb.addEventListener('click', loadUserControl);
+    var ab = $('ucAddRuleBtn');
+    if (ab) ab.addEventListener('click', function () { $('ucAddWrap').classList.remove('hidden'); });
+    var cancel = $('ucRuleCancel');
+    if (cancel) cancel.addEventListener('click', function () { $('ucAddWrap').classList.add('hidden'); });
+    var submit = $('ucRuleSubmit');
+    if (submit) submit.addEventListener('click', function () {
+      var type = $('ucRuleType').value;
+      var val = ($('ucRuleValue').value || '').trim();
+      var note = ($('ucRuleNote').value || '').trim();
+      $('ucAddWrap').classList.add('hidden');
+      $('ucRuleValue').value = '';
+      $('ucRuleNote').value = '';
+      if (type === 'global') { ucRestrict('global', ''); return; }
+      if (!val) { alert('请填写目标值'); return; }
+      ucRestrict(type, val);
+    });
   }
 
   // ===== 站点 =====
@@ -4658,6 +4897,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     $('recForm').addEventListener('submit', submitRecReview);
     $('clearSessionsBtn').addEventListener('click', clearSessionsWithBackup);
     $('saveApiBtn').addEventListener('click', saveApiConfig);
+    initUserControl();
     var csBtn = $('checkSessionBtn');
     if (csBtn) csBtn.addEventListener('click', function () { checkAdminSession(); });
     var ckBtn = $('copyKeyLinkBtn');

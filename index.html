@@ -1571,6 +1571,27 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
           </div>
         </div>
         <div class="settings-card">
+          <h3>短信验证码配置</h3>
+          <p class="settings-desc">手机号自动发送验证码开关与发送内容模板配置。短信通道仅支持验证码类短信，模板需在阿里云审核通过后方可正常发送。</p>
+          <div class="form-stack">
+            <label class="settings-row">
+              <input type="checkbox" id="smsEnabledInput">
+              <span>开启手机号自动发送验证码</span>
+            </label>
+            <label for="smsTemplateSelect">发送内容模板</label>
+            <select id="smsTemplateSelect" class="input">
+              <option value="100001">100001 · 默认验证码模板</option>
+              <option value="custom">自定义模板（请输入模板 Code）</option>
+            </select>
+            <input type="text" id="smsTemplateCustomInput" class="input hidden" placeholder="阿里云短信验证码模板 Code，如 100002" autocomplete="off">
+            <div class="settings-row">
+              <button id="saveSmsBtn" class="btn btn-primary" type="button">保存配置</button>
+            </div>
+            <div id="smsMsg" class="form-msg"></div>
+            <p class="settings-note">说明：短信通道仅支持验证码类短信，模板需在阿里云审核通过；服务端对发送频率有限流保护（同手机号 60 秒内限 1 条）。</p>
+          </div>
+        </div>
+        <div class="settings-card">
           <h3>访客管理</h3>
           <p class="settings-desc">管理访客一次性动态码与申请状态。</p>
           <div id="visitorAdminList" class="token-list"></div>
@@ -2890,6 +2911,32 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     loadNews(true);
     setTimeout(function () {
       var m = $('apiMsg');
+      if (m && m.className.indexOf('ok') >= 0) m.textContent = '配置已保存';
+    }, 2000);
+  }
+  function saveSmsConfig() {
+    var msg = $('smsMsg');
+    if (!msg) return;
+    var enabled = $('smsEnabledInput').checked;
+    var sel = $('smsTemplateSelect');
+    var tpl = '';
+    if (sel.value === 'custom') {
+      tpl = $('smsTemplateCustomInput').value.trim();
+      if (!/^[0-9]{5,8}$/.test(tpl)) {
+        msg.className = 'form-msg err';
+        msg.textContent = '请填写有效的阿里云短信模板 Code（5~8 位数字）';
+        return;
+      }
+    } else {
+      tpl = sel.value;
+    }
+    db.settings.smsEnabled = enabled;
+    db.settings.smsTemplateCode = tpl;
+    saveDB();
+    msg.className = 'form-msg ok';
+    msg.textContent = (enabled ? '已开启' : '已关闭') + '手机号自动发送验证码，模板 Code：' + tpl;
+    setTimeout(function () {
+      var m = $('smsMsg');
       if (m && m.className.indexOf('ok') >= 0) m.textContent = '配置已保存';
     }, 2000);
   }
@@ -4543,6 +4590,20 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     renderVisitorAdminList();
     var bi = $('apiBaseInput'); if (bi) bi.value = (db.settings.adminApiBase || '');
     var ti = $('apiTokenInput'); if (ti) ti.value = (db.settings.adminToken || '');
+    var smsOn = $('smsEnabledInput'); if (smsOn) smsOn.checked = !!db.settings.smsEnabled;
+    var smsSel = $('smsTemplateSelect');
+    if (smsSel) {
+      var savedTpl = (db.settings.smsTemplateCode || '').trim();
+      if (savedTpl && savedTpl !== '100001') {
+        smsSel.value = 'custom';
+        var smsCus = $('smsTemplateCustomInput');
+        if (smsCus) { smsCus.value = savedTpl; smsCus.classList.remove('hidden'); }
+      } else {
+        smsSel.value = '100001';
+        var smsCus2 = $('smsTemplateCustomInput');
+        if (smsCus2) smsCus2.classList.add('hidden');
+      }
+    }
     renderAdminSessionState(false);
     updateSessionSummary();
     touchSession(); saveDB();
@@ -4951,6 +5012,14 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     $('recForm').addEventListener('submit', submitRecReview);
     $('clearSessionsBtn').addEventListener('click', clearSessionsWithBackup);
     $('saveApiBtn').addEventListener('click', saveApiConfig);
+    $('saveSmsBtn').addEventListener('click', saveSmsConfig);
+    var smsSel = $('smsTemplateSelect');
+    if (smsSel) smsSel.addEventListener('change', function () {
+      var cus = $('smsTemplateCustomInput');
+      if (!cus) return;
+      if (this.value === 'custom') cus.classList.remove('hidden');
+      else cus.classList.add('hidden');
+    });
     initUserControl();
     var csBtn = $('checkSessionBtn');
     if (csBtn) csBtn.addEventListener('click', function () { checkAdminSession(); });

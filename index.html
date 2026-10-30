@@ -472,6 +472,15 @@ input, select { font-family: inherit; }
 .session-state.ok { color: var(--success); }
 .session-state.err { color: var(--danger); }
 .settings-note { color: var(--text-dim); font-size: 12px; line-height: 1.5; margin: 0; word-break: break-all; }
+.welcome-tip { display: flex; align-items: center; gap: 10px; background: linear-gradient(135deg, #4a90d9, #3a78c2); color: #fff; border-radius: 10px; padding: 10px 14px; margin: 0 0 16px; box-shadow: 0 4px 14px rgba(74,144,217,.25); font-size: 14px; }
+.welcome-tip-icon { font-size: 16px; flex: none; }
+.welcome-tip-text { flex: 1; }
+.welcome-tip-close { background: rgba(255,255,255,.18); border: none; color: #fff; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 12px; flex: none; }
+.welcome-tip-close:hover { background: rgba(255,255,255,.3); }
+.uc-stat-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.uc-stat-card { flex: 1; min-width: 140px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 14px 16px; }
+.uc-stat-num { font-size: 24px; font-weight: 700; color: #7ec8ff; }
+.uc-stat-label { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
 /* 复制失败时会回显完整链接，避免小屏（480px）横向溢出 */
 .settings-card .form-msg { word-break: break-all; }
 
@@ -1117,6 +1126,8 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       <a href="#" class="nav-item" data-page="notices" data-role="owner,admin">公告管理</a>
       <a href="#" class="nav-item with-ic" data-page="usercontrol" data-role="owner,admin"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l2.4 2.4L17 4l.6 2.6L20 9l-1 3 1 3-2.4 2.4L17 20l-2.6-.6L12 22l-2.4-2.4L7 20l-.6-2.6L4 15l1-3-1-3 2.4-2.4L7 4l2.6.6L12 2z"/><path d="M9 12l2 2 4-4"/></svg>航站服务台<span id="ucAppealDot" class="nav-dot hidden"></span></a>
       <a href="#" class="nav-item" data-page="trash" data-role="owner,admin">回收站</a>
+      <a href="#" class="nav-item" data-page="users" data-role="owner,admin">用户管理</a>
+      <a href="#" class="nav-item" data-page="sms" data-role="owner,admin">短信管理</a>
       <a href="#" class="nav-item" data-page="sites" data-role="owner">站点管理</a>
       <a href="#" class="nav-item" data-page="ops" data-role="owner,admin">运营选题</a>
       <a href="#" class="nav-item" data-page="settings" data-role="owner,admin">系统设置</a>
@@ -1136,6 +1147,13 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
         <button id="logoutBtn" class="btn btn-ghost">退出登录</button>
       </div>
     </header>
+
+    <!-- 蓝色提示条：每次进入后台显示，关闭后本次不再显示（localStorage 记忆，可在系统设置恢复） -->
+    <div id="welcomeTipBar" class="welcome-tip hidden">
+      <span class="welcome-tip-icon">✈</span>
+      <span class="welcome-tip-text" id="welcomeTipText">欢迎回来，管理中枢运行中</span>
+      <button id="welcomeTipClose" class="welcome-tip-close" title="关闭提示" type="button">✕</button>
+    </div>
 
     <main class="content">
       <!-- 数据看板 -->
@@ -1512,6 +1530,77 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       </section>
 
       <!-- 系统设置 -->
+      <!-- 用户管理 -->
+      <section id="page-users" class="page hidden">
+        <div class="toolbar">
+          <div>
+            <div class="toolbar-title">用户管理</div>
+            <p class="sub-note">后台创建用户时手机号为选填项（仅限后台操作，创建记录标记「后台创建」）；列表中的注册用户为前端（用户端）登录产生的记录，只读展示。</p>
+          </div>
+        </div>
+        <div id="usersStatus" class="list-status"></div>
+
+        <div class="table-card">
+          <div class="toolbar-title" style="font-size:14px">创建用户（手机号选填）</div>
+          <div class="settings-row">
+            <input type="text" id="cuUsername" class="input" style="width:170px" placeholder="用户名（必填）" autocomplete="off">
+            <input type="password" id="cuPassword" class="input" style="width:170px" placeholder="密码（必填，至少4位）" autocomplete="new-password">
+            <input type="text" id="cuPhone" class="input" style="width:180px" placeholder="手机号（选填，11位）" autocomplete="off">
+            <button id="cuCreateBtn" class="btn btn-primary" type="button">创建用户</button>
+          </div>
+          <p class="settings-note">说明：手机号选填仅限后台创建时可不填；前端（用户端）注册 / 登录仍必须填写手机号。</p>
+        </div>
+
+        <div class="table-card">
+          <div class="toolbar-title" style="font-size:14px">全部用户（<span id="usersCount">0</span>）</div>
+          <table class="table">
+            <thead><tr><th>用户名</th><th>角色</th><th>手机号</th><th>来源</th><th>创建时间</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody id="usersTbody"></tbody>
+          </table>
+          <p id="usersEmpty" class="empty hidden">暂无用户</p>
+        </div>
+      </section>
+
+      <!-- 短信管理 -->
+      <section id="page-sms" class="page hidden">
+        <div class="toolbar">
+          <div>
+            <div class="toolbar-title">短信管理</div>
+            <p class="sub-note">真实调用 /api/sms-verify 下发短信验证码；发送记录本地持久化（test_sms_records），支持手动更新回执状态。</p>
+          </div>
+        </div>
+        <div id="smsPageStatus" class="list-status"></div>
+
+        <div class="uc-stat-row">
+          <div class="uc-stat-card"><div class="uc-stat-num" id="smsQuotaNum">1000</div><div class="uc-stat-label">剩余短信额度</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="smsCostNum">0</div><div class="uc-stat-label">本次扣费</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="smsSentNum">0</div><div class="uc-stat-label">成功发送</div></div>
+        </div>
+
+        <div class="table-card">
+          <div class="toolbar-title" style="font-size:14px">发送短信验证码</div>
+          <div class="settings-row">
+            <input type="text" id="smsPhoneInput" class="input" style="width:190px" placeholder="手机号（11位）" autocomplete="off">
+            <select id="smsSendTemplate" class="input" style="width:230px">
+              <option value="100001">100001 · 默认验证码模板</option>
+              <option value="custom">自定义模板（请输入模板 Code）</option>
+            </select>
+            <input type="text" id="smsSendTemplateCustom" class="input hidden" style="width:180px" placeholder="阿里云短信模板 Code，如 100002" autocomplete="off">
+            <button id="smsSendBtn" class="btn btn-primary" type="button">发送短信</button>
+          </div>
+          <p class="settings-note">说明：每次成功发送扣减 1 条额度（初始额度可在系统设置配置，默认 1000）；被限流或失败不扣减。同手机号 60 秒内限 1 条。</p>
+        </div>
+
+        <div class="table-card">
+          <div class="toolbar-title" style="font-size:14px">发送记录（<span id="smsRecCount">0</span>）</div>
+          <table class="table">
+            <thead><tr><th>发送时间</th><th>手机号(脱敏)</th><th>模板</th><th>BizId</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody id="smsRecTbody"></tbody>
+          </table>
+          <p id="smsRecEmpty" class="empty hidden">暂无发送记录</p>
+        </div>
+      </section>
+
       <section id="page-settings" class="page hidden">
         <div class="settings-card">
           <h3>修改密码</h3>
@@ -1584,11 +1673,26 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
               <option value="custom">自定义模板（请输入模板 Code）</option>
             </select>
             <input type="text" id="smsTemplateCustomInput" class="input hidden" placeholder="阿里云短信验证码模板 Code，如 100002" autocomplete="off">
+            <label for="smsQuotaInput">初始短信额度（条，默认 1000）</label>
+            <input type="number" id="smsQuotaInput" class="input" min="0" step="1" placeholder="1000" autocomplete="off">
             <div class="settings-row">
               <button id="saveSmsBtn" class="btn btn-primary" type="button">保存配置</button>
             </div>
             <div id="smsMsg" class="form-msg"></div>
-            <p class="settings-note">说明：短信通道仅支持验证码类短信，模板需在阿里云审核通过；服务端对发送频率有限流保护（同手机号 60 秒内限 1 条）。</p>
+            <p class="settings-note">说明：短信通道仅支持验证码类短信，模板需在阿里云审核通过；服务端对发送频率有限流保护（同手机号 60 秒内限 1 条）。短信管理页每次成功发送扣减 1 条额度，被限流 / 失败不扣减。</p>
+          </div>
+        </div>
+        <div class="settings-card">
+          <h3>蓝色提示条</h3>
+          <p class="settings-desc">每次进入后台时页面顶部显示蓝色提示条；关闭后本次不再显示，可随时在此恢复。</p>
+          <div class="form-stack">
+            <label for="tipTextInput">提示文案</label>
+            <input type="text" id="tipTextInput" class="input" placeholder="欢迎回来，管理中枢运行中" autocomplete="off">
+            <div class="settings-row">
+              <button id="saveTipBtn" class="btn btn-primary" type="button">保存文案</button>
+              <button id="restoreTipBtn" class="btn btn-ghost" type="button">恢复显示提示条</button>
+            </div>
+            <div id="tipMsg" class="form-msg"></div>
           </div>
         </div>
         <div class="settings-card">
@@ -1790,7 +1894,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       d = {
         sites: [],
         feedbacks: [],
-        settings: { siteKeys: {}, aiEnabled: true, aiEndpoint: AI_DEFAULT.endpoint, aiApiKey: AI_DEFAULT.apiKey, aiModel: AI_DEFAULT.model },
+        settings: { siteKeys: {}, aiEnabled: true, aiEndpoint: AI_DEFAULT.endpoint, aiApiKey: AI_DEFAULT.apiKey, aiModel: AI_DEFAULT.model, smsEnabled: false, smsTemplateCode: '100001', smsQuota: 1000, tipText: '欢迎回来，管理中枢运行中' },
         analytics: { views: {} },
         users: [ { username: 'henry', password: 'wanwan123', role: 'owner', createdAt: nowStr() } ],
         messages: [
@@ -1811,6 +1915,10 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     if (!d.trash) d.trash = [];
     if (!d.analytics) d.analytics = { views: {} };
     if (!d.settings) d.settings = { siteKeys: {}, aiEnabled: true };
+    if (d.settings.smsQuota === undefined || d.settings.smsQuota === null) d.settings.smsQuota = 1000;
+    if (!d.settings.tipText) d.settings.tipText = '欢迎回来，管理中枢运行中';
+    if (d.settings.smsEnabled === undefined) d.settings.smsEnabled = false;
+    if (!d.settings.smsTemplateCode) d.settings.smsTemplateCode = '100001';
     if (!d.sessions) d.sessions = [];
     if (!d.theme) d.theme = 'default';
     return d;
@@ -1922,6 +2030,8 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     recStartPolling();
     // 已登录状态：刷新服务端会话状态行（令牌免填改造第 6 条）
     if (isAdmin()) checkAdminSession();
+    // 蓝色提示条：每次进入后台展示（关闭后 localStorage 记忆本次不再显示）
+    showTipIfNeeded();
   }
 
   function renderUserChip() {
@@ -1953,7 +2063,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   function switchPage(name) {
     // 敏感面板前置身份验证（登录密码）
     if (typeof requireGate === 'function' && !requireGate(name)) return;
-    var pages = ['dashboard', 'feedbacks', 'recommendations', 'ops', 'notices', 'usercontrol', 'trash', 'sites', 'settings'];
+    var pages = ['dashboard', 'feedbacks', 'recommendations', 'ops', 'notices', 'usercontrol', 'trash', 'users', 'sms', 'sites', 'settings'];
     for (var i = 0; i < pages.length; i++) {
       $('page-' + pages[i]).classList.toggle('hidden', pages[i] !== name);
     }
@@ -1961,7 +2071,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     for (var j = 0; j < navs.length; j++) {
       navs[j].classList.toggle('active', navs[j].getAttribute('data-page') === name);
     }
-    var titles = { dashboard: '数据看板', feedbacks: '反馈管理', recommendations: '推荐机型', ops: '运营选题', notices: '公告管理', usercontrol: '航站服务台', trash: '回收站', sites: '站点管理', settings: '系统设置' };
+    var titles = { dashboard: '数据看板', feedbacks: '反馈管理', recommendations: '推荐机型', ops: '运营选题', notices: '公告管理', usercontrol: '航站服务台', trash: '回收站', users: '用户管理', sms: '短信管理', sites: '站点管理', settings: '系统设置' };
     $('pageTitle').textContent = titles[name] || '';
     if (name === 'dashboard') { loadStats(); renderTrend(); renderRecent(); renderNotes(); refreshLivePanels(); }
     if (name === 'feedbacks') loadFeedbacks();
@@ -1970,6 +2080,8 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     if (name === 'notices') loadAnnouncements(false);
     if (name === 'usercontrol') loadUserControl();
     if (name === 'trash') renderTrash();
+    if (name === 'users') renderUsersPage();
+    if (name === 'sms') renderSmsPage();
     if (name === 'sites') renderSites();
     if (name === 'settings') renderSettings();
   }
@@ -2932,14 +3044,245 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     }
     db.settings.smsEnabled = enabled;
     db.settings.smsTemplateCode = tpl;
+    var qIn = $('smsQuotaInput');
+    var q = qIn ? parseInt(qIn.value, 10) : NaN;
+    if (!isNaN(q) && q >= 0) db.settings.smsQuota = q;
     saveDB();
     msg.className = 'form-msg ok';
-    msg.textContent = (enabled ? '已开启' : '已关闭') + '手机号自动发送验证码，模板 Code：' + tpl;
+    msg.textContent = (enabled ? '已开启' : '已关闭') + '手机号自动发送验证码，模板 Code：' + tpl + '；短信额度：' + smsQuota();
     setTimeout(function () {
       var m = $('smsMsg');
       if (m && m.className.indexOf('ok') >= 0) m.textContent = '配置已保存';
     }, 2000);
   }
+  // ===== 短信管理 =====
+  var SMS_RECORDS_KEY = 'test_sms_records';
+  var TIP_HIDE_KEY = 'aa_tip_hidden_v1';
+  function smsRecords() {
+    var arr = readStored(SMS_RECORDS_KEY, []);
+    return Array.isArray(arr) ? arr : [];
+  }
+  function saveSmsRecords(arr) { writeStored(SMS_RECORDS_KEY, arr); }
+  function smsQuota() {
+    var q = (db && db.settings && db.settings.smsQuota);
+    q = (q === undefined || q === null) ? 1000 : parseInt(q, 10);
+    return isNaN(q) ? 1000 : q;
+  }
+  function smsMaskPhone(v) {
+    v = String(v || '').trim();
+    if (!v) return '—';
+    return /^1[3-9]\d{9}$/.test(v) ? v.slice(0, 3) + '****' + v.slice(7) : (v.length > 1 ? v.slice(0, 1) + '****' : v);
+  }
+  function renderSmsQuota() {
+    var el = $('smsQuotaNum'); if (el) el.textContent = smsQuota();
+    var cost = $('smsCostNum'); if (cost) cost.textContent = (db.settings.smsLastCost || 0);
+    var recs = smsRecords();
+    var sent = 0;
+    for (var i = 0; i < recs.length; i++) {
+      if (recs[i].status === '成功' || recs[i].status === '已回执' || recs[i].status === '已发送') sent++;
+    }
+    var s2 = $('smsSentNum'); if (s2) s2.textContent = sent;
+  }
+  function renderSmsPage() {
+    renderSmsQuota();
+    renderSmsRecords();
+  }
+  function renderSmsRecords() {
+    var tbody = $('smsRecTbody');
+    if (!tbody) return;
+    var arr = smsRecords();
+    tbody.innerHTML = '';
+    var empty = $('smsRecEmpty'); if (empty) empty.classList.toggle('hidden', arr.length > 0);
+    var cnt = $('smsRecCount'); if (cnt) cnt.textContent = arr.length;
+    arr.slice().sort(function (a, b) { return String(b.time).localeCompare(String(a.time)); }).forEach(function (r) {
+      var tr = document.createElement('tr');
+      var c1 = document.createElement('td'); c1.textContent = r.time || '';
+      var c2 = document.createElement('td'); c2.textContent = smsMaskPhone(r.phone);
+      var c3 = document.createElement('td'); c3.textContent = r.templateCode || '';
+      var c4 = document.createElement('td'); c4.textContent = r.bizId || '—'; c4.style.fontFamily = 'monospace';
+      var c5 = document.createElement('td'); c5.textContent = r.status || '已发送';
+      c5.style.color = (r.status === '成功' || r.status === '已回执') ? '#7ee0a3' : (r.status === '失败' ? '#ff9d6c' : '#e8c87e');
+      var c6 = document.createElement('td');
+      ['发送成功', '发送失败', '已回执'].forEach(function (st) {
+        var b = document.createElement('button');
+        b.className = 'btn btn-ghost';
+        b.style.padding = '2px 8px'; b.style.fontSize = '12px'; b.style.marginRight = '4px';
+        b.textContent = st;
+        b.setAttribute('data-sms-id', r.id);
+        b.setAttribute('data-sms-status', st);
+        if (r.status === st) { b.disabled = true; b.style.opacity = '0.5'; }
+        c6.appendChild(b);
+      });
+      tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c3); tr.appendChild(c4); tr.appendChild(c5); tr.appendChild(c6);
+      tbody.appendChild(tr);
+    });
+  }
+  function smsSetRecordStatus(id, status) {
+    var arr = smsRecords();
+    var hit = false;
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i].id === id) { arr[i].status = status; hit = true; break; }
+    }
+    if (!hit) return;
+    saveSmsRecords(arr);
+    renderSmsRecords();
+  }
+  function smsSend() {
+    var phone = $('smsPhoneInput').value.trim();
+    var tpl = $('smsSendTemplate').value;
+    var tplCode = tpl;
+    if (tpl === 'custom') {
+      tplCode = $('smsSendTemplateCustom').value.trim();
+      if (!/^[0-9]{5,8}$/.test(tplCode)) { alert('请填写有效的阿里云短信模板 Code（5~8 位数字）'); return; }
+    }
+    if (!/^1[3-9]\d{9}$/.test(phone)) { alert('请输入有效的 11 位手机号'); return; }
+    var st = $('smsPageStatus'); if (st) { st.textContent = '正在发送…'; st.className = 'list-status'; }
+    var btn = $('smsSendBtn'); if (btn) btn.disabled = true;
+    function done() { if (btn) btn.disabled = false; }
+    recRequest('/api/sms-verify', { method: 'POST', body: { phoneNumber: phone } }).then(function (data) {
+      var bizId = (data && data.bizId) ? String(data.bizId) : '';
+      var rec = { id: genId(), phone: phone, time: nowStr(), templateCode: tplCode, bizId: bizId, status: bizId ? '已发送' : '待回执' };
+      var arr = smsRecords();
+      arr.unshift(rec);
+      saveSmsRecords(arr);
+      // 成功发送扣减 1 条额度（限流 / 失败不扣减）
+      var quota = smsQuota();
+      if (quota > 0) db.settings.smsQuota = quota - 1;
+      db.settings.smsLastCost = 1;
+      saveDB();
+      renderSmsQuota();
+      renderSmsRecords();
+      if (st) { st.textContent = '发送成功：' + ((data && data.message) ? data.message : '验证码已下发') + (bizId ? '，BizId=' + bizId : ''); st.className = 'list-status'; }
+      done();
+    }).catch(function (err) {
+      var rec = { id: genId(), phone: phone, time: nowStr(), templateCode: tplCode, bizId: '', status: '失败' };
+      var arr = smsRecords();
+      arr.unshift(rec);
+      saveSmsRecords(arr);
+      db.settings.smsLastCost = 0;
+      saveDB();
+      renderSmsQuota();
+      renderSmsRecords();
+      if (st) { st.textContent = '发送失败：' + ((err && err.message) ? err.message : '未知错误'); st.className = 'list-status err'; }
+      done();
+    });
+  }
+
+  // ===== 用户管理 =====
+  function userRoleText(r) {
+    if (r === 'owner') return '主管理员';
+    if (r === 'admin') return '管理员';
+    if (r === 'guest') return '参观';
+    return '用户';
+  }
+  function userSourceText(u) {
+    if (u && u.source) return u.source;
+    return (u && u.role === 'owner') ? '内置' : '注册';
+  }
+  function renderUsersPage() {
+    var tbody = $('usersTbody');
+    if (!tbody) return;
+    var arr = (db.users || []).slice().sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); });
+    tbody.innerHTML = '';
+    var empty = $('usersEmpty'); if (empty) empty.classList.toggle('hidden', arr.length > 0);
+    var cnt = $('usersCount'); if (cnt) cnt.textContent = arr.length;
+    arr.forEach(function (u) {
+      var tr = document.createElement('tr');
+      var c1 = document.createElement('td'); c1.textContent = u.username;
+      var c2 = document.createElement('td'); c2.textContent = userRoleText(u.role);
+      var c3 = document.createElement('td'); c3.textContent = (u.phone && String(u.phone).trim()) ? smsMaskPhone(u.phone) : '未填写';
+      var c4 = document.createElement('td'); c4.textContent = userSourceText(u);
+      var c5 = document.createElement('td'); c5.textContent = u.createdAt || '';
+      var c6 = document.createElement('td');
+      c6.textContent = u.enabled === false ? '已停用' : '正常';
+      c6.style.color = u.enabled === false ? '#ff9d6c' : '#7ee0a3';
+      var c7 = document.createElement('td');
+      if (u.role !== 'owner') {
+        var b1 = document.createElement('button');
+        b1.className = 'btn btn-ghost'; b1.style.padding = '2px 8px'; b1.style.fontSize = '12px';
+        b1.textContent = u.enabled === false ? '启用' : '停用';
+        b1.setAttribute('data-user-id', u.username);
+        b1.setAttribute('data-user-act', 'toggle');
+        c7.appendChild(b1);
+        var b2 = document.createElement('button');
+        b2.className = 'btn btn-danger'; b2.style.padding = '2px 8px'; b2.style.fontSize = '12px'; b2.style.marginLeft = '4px';
+        b2.textContent = '删除';
+        b2.setAttribute('data-user-id', u.username);
+        b2.setAttribute('data-user-act', 'remove');
+        c7.appendChild(b2);
+      } else {
+        c7.textContent = '—';
+      }
+      tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c3); tr.appendChild(c4); tr.appendChild(c5); tr.appendChild(c6); tr.appendChild(c7);
+      tbody.appendChild(tr);
+    });
+  }
+  function createUser() {
+    var st = $('usersStatus');
+    var name = $('cuUsername').value.trim();
+    var pwd = $('cuPassword').value;
+    var phone = $('cuPhone').value.trim();
+    if (!name) { if (st) { st.textContent = '请输入用户名'; st.className = 'list-status err'; } return; }
+    if (pwd.length < 4) { if (st) { st.textContent = '密码至少 4 位'; st.className = 'list-status err'; } return; }
+    if (phone && !/^1[3-9]\d{9}$/.test(phone)) { if (st) { st.textContent = '手机号格式不正确（选填，如填写需为 11 位大陆手机号）'; st.className = 'list-status err'; } return; }
+    if (findUser(name)) { if (st) { st.textContent = '用户名已存在'; st.className = 'list-status err'; } return; }
+    db.users.push({ username: name, password: pwd, role: 'admin', phone: phone, source: '后台创建', createdAt: nowStr(), enabled: true });
+    saveDB();
+    $('cuUsername').value = ''; $('cuPassword').value = ''; $('cuPhone').value = '';
+    renderUsersPage();
+    if (st) { st.textContent = '已创建用户：' + name + '（来源：后台创建' + (phone ? '，手机号已填写' : '，未填手机号') + '）'; st.className = 'list-status'; }
+  }
+  function usersToggleUser(name) {
+    var u = findUser(name);
+    if (!u) return;
+    if (u.role === 'owner') { alert('主管理员账号不能停用'); return; }
+    u.enabled = u.enabled === false ? true : false;
+    saveDB();
+    renderUsersPage();
+  }
+  function removeUser(name) {
+    var u = findUser(name);
+    if (!u) return;
+    if (u.role === 'owner') { alert('主管理员账号不能删除'); return; }
+    if (state.session && state.session.username === u.username) { alert('不能删除当前登录账号'); return; }
+    if (!confirm('确认删除用户「' + name + '」？此操作不可撤销。')) return;
+    db.users = db.users.filter(function (x) { return x.username !== name; });
+    saveDB();
+    renderUsersPage();
+  }
+
+  // ===== 蓝色提示条 =====
+  function showTipIfNeeded() {
+    var bar = $('welcomeTipBar');
+    if (!bar) return;
+    try { if (localStorage.getItem(TIP_HIDE_KEY) === '1') return; } catch (e) {}
+    var txt = $('welcomeTipText');
+    if (txt) txt.textContent = (db.settings && db.settings.tipText) ? db.settings.tipText : '欢迎回来，管理中枢运行中';
+    bar.classList.remove('hidden');
+  }
+  function hideTipBar() {
+    var bar = $('welcomeTipBar');
+    if (bar) bar.classList.add('hidden');
+    try { localStorage.setItem(TIP_HIDE_KEY, '1'); } catch (e) {}
+  }
+  function restoreTipBar() {
+    try { localStorage.removeItem(TIP_HIDE_KEY); } catch (e) {}
+    var bar = $('welcomeTipBar');
+    if (bar) bar.classList.remove('hidden');
+    var txt = $('welcomeTipText');
+    if (txt) txt.textContent = (db.settings && db.settings.tipText) ? db.settings.tipText : '欢迎回来，管理中枢运行中';
+    var msg = $('tipMsg');
+    if (msg) { msg.className = 'form-msg ok'; msg.textContent = '已恢复显示提示条，下次进入后台将自动展示'; }
+  }
+  function saveTipConfig() {
+    var val = $('tipTextInput').value.trim();
+    db.settings.tipText = val || '欢迎回来，管理中枢运行中';
+    saveDB();
+    var msg = $('tipMsg');
+    if (msg) { msg.className = 'form-msg ok'; msg.textContent = '提示文案已保存'; }
+    setTimeout(function () { var m = $('tipMsg'); if (m && m.className.indexOf('ok') >= 0) m.textContent = '文案已保存'; }, 2000);
+  }
+
   function updateSessionSummary() {
     var el = $('sessionSummary');
     if (!el) return;
@@ -4604,6 +4947,8 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
         if (smsCus2) smsCus2.classList.add('hidden');
       }
     }
+    var quotaIn = $('smsQuotaInput'); if (quotaIn) quotaIn.value = smsQuota();
+    var tipIn = $('tipTextInput'); if (tipIn) tipIn.value = (db.settings.tipText || '欢迎回来，管理中枢运行中');
     renderAdminSessionState(false);
     updateSessionSummary();
     touchSession(); saveDB();
@@ -5020,6 +5365,37 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       if (this.value === 'custom') cus.classList.remove('hidden');
       else cus.classList.add('hidden');
     });
+    var smsSendSel = $('smsSendTemplate');
+    if (smsSendSel) smsSendSel.addEventListener('change', function () {
+      var cus = $('smsSendTemplateCustom');
+      if (!cus) return;
+      if (this.value === 'custom') cus.classList.remove('hidden');
+      else cus.classList.add('hidden');
+    });
+    var smsSendBtn = $('smsSendBtn');
+    if (smsSendBtn) smsSendBtn.addEventListener('click', smsSend);
+    var smsRecTb = $('smsRecTbody');
+    if (smsRecTb) smsRecTb.addEventListener('click', function (e) {
+      var t = e.target;
+      if (!t || !t.getAttribute || !t.getAttribute('data-sms-id')) return;
+      smsSetRecordStatus(t.getAttribute('data-sms-id'), t.getAttribute('data-sms-status'));
+    });
+    var usersTb = $('usersTbody');
+    if (usersTb) usersTb.addEventListener('click', function (e) {
+      var t = e.target;
+      if (!t || !t.getAttribute || !t.getAttribute('data-user-id')) return;
+      var uid = t.getAttribute('data-user-id');
+      if (t.getAttribute('data-user-act') === 'toggle') usersToggleUser(uid);
+      else if (t.getAttribute('data-user-act') === 'remove') removeUser(uid);
+    });
+    var cuBtn = $('cuCreateBtn');
+    if (cuBtn) cuBtn.addEventListener('click', createUser);
+    var tipClose = $('welcomeTipClose');
+    if (tipClose) tipClose.addEventListener('click', hideTipBar);
+    var saveTipBtn = $('saveTipBtn');
+    if (saveTipBtn) saveTipBtn.addEventListener('click', saveTipConfig);
+    var restoreTipBtn = $('restoreTipBtn');
+    if (restoreTipBtn) restoreTipBtn.addEventListener('click', restoreTipBar);
     initUserControl();
     var csBtn = $('checkSessionBtn');
     if (csBtn) csBtn.addEventListener('click', function () { checkAdminSession(); });

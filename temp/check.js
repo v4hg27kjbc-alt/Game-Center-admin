@@ -1,0 +1,3587 @@
+
+(function () {
+  'use strict';
+
+  // ===== 常量 =====
+  var DB_KEY = 'aa_standalone_db_v1';
+  var SESSION_KEY = 'aa_session_v1';
+  var AI_DEFAULT = {
+    endpoint: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+    apiKey: '7ff9b790806a4b76a3ac3459aa27c9c3.zxxRjE1sdwBTvPVO',
+    model: 'glm-4-flash'
+  };
+  var OWNER_NAME = 'henry';
+
+  // ===== 状态 =====
+  var state = {
+    session: null,
+    siteId: 'all',
+    statusFilter: 'all',
+    monthFilter: 'all',
+    fbView: 'detail',
+    search: ''
+  };
+  var db = null;
+
+  // ===== 工具函数 =====
+  function $(id) { return document.getElementById(id); }
+  function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  }
+  function nowStr() {
+    var d = new Date();
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  function genId() { return 'id_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+  function genSiteKey() { return 'sk_' + Math.random().toString(36).slice(2, 10); }
+  function genCode() {
+    var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    var s = '';
+    for (var i = 0; i < 8; i++) { s += chars.charAt(Math.floor(Math.random() * chars.length)); }
+    return s;
+  }
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function readStored(key, fallback) {
+    try { var raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
+    catch (e) { return fallback; }
+  }
+  function writeStored(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+  }
+
+  // ===== 数据层 =====
+  function loadDB() {
+    var d = readStored(DB_KEY, null);
+    if (!d || typeof d !== 'object') {
+      d = {
+        sites: [],
+        feedbacks: [],
+        settings: { siteKeys: {}, aiEnabled: true, aiEndpoint: AI_DEFAULT.endpoint, aiApiKey: AI_DEFAULT.apiKey, aiModel: AI_DEFAULT.model, smsEnabled: false, smsTemplateCode: '100001', smsQuota: 1000, tipText: '欢迎回来，管理中枢运行中' },
+        analytics: { views: {} },
+        users: [ { username: 'henry', password: 'wanwan123', role: 'owner', createdAt: nowStr() } ],
+        messages: [
+          { id: genId(), type: 'notice', title: '欢迎使用后台管理系统', content: '这是消息中心。管理员申请、审批结果与系统通知都会出现在这里。', status: 'read', createdAt: nowStr() }
+        ],
+        tickets: [],
+        visitorOnce: null,
+        sessions: [],
+        theme: 'default'
+      };
+      saveDB();
+    }
+    if (!d.users) d.users = [ { username: 'henry', password: 'wanwan123', role: 'owner', createdAt: nowStr() } ];
+    if (!d.messages) d.messages = [];
+    if (!d.tickets) d.tickets = [];
+    if (!d.notices) d.notices = [];
+    if (!d.notes) d.notes = [];
+    if (!d.trash) d.trash = [];
+    if (!d.analytics) d.analytics = { views: {} };
+    if (!d.settings) d.settings = { siteKeys: {}, aiEnabled: true };
+    if (d.settings.smsQuota === undefined || d.settings.smsQuota === null) d.settings.smsQuota = 1000;
+    if (!d.settings.tipText) d.settings.tipText = '欢迎回来，管理中枢运行中';
+    if (d.settings.smsEnabled === undefined) d.settings.smsEnabled = false;
+    if (!d.settings.smsTemplateCode) d.settings.smsTemplateCode = '100001';
+    if (!d.sessions) d.sessions = [];
+    if (!d.theme) d.theme = 'default';
+    return d;
+  }
+  function saveDB() { writeStored(DB_KEY, db); }
+  function loadSession() { return readStored(SESSION_KEY, null); }
+  function saveSession() { writeStored(SESSION_KEY, state.session); }
+  function clearSession() { try { localStorage.removeItem(SESSION_KEY); } catch (e) {} }
+
+  function findUser(name) {
+    for (var i = 0; i < db.users.length; i++) {
+      if (db.users[i].username.toLowerCase() === String(name).toLowerCase().trim()) return db.users[i];
+    }
+    return null;
+  }
+  function getSiteName(key) {
+    if (key === 'all') return '全部站点';
+    var s = db.settings.siteKeys[key];
+    return s ? s.name : key;
+  }
+  function viewsOf(key) {
+    return (db.analytics && db.analytics.views && db.analytics.views[key]) ? db.analytics.views[key] : 0;
+  }
+
+  // ===== 权限 =====
+  function isOwner() { return state.session && state.session.role === 'owner'; }
+  function isAdmin() { return state.session && (state.session.role === 'owner' || state.session.role === 'admin'); }
+  function isGuest() { return state.session && state.session.role === 'guest'; }
+
+  // ===== 登录 =====
+  function initAuth() {
+    var s = loadSession();
+    var u0 = s ? findUser(s.username) : null;
+    if (s && s.loginDate === todayStr() && u0 && u0.enabled !== false && sessionAlive(s)) {
+      state.session = s;
+      showMain();
+    } else {
+      clearSession();
+      state.session = null;
+      $('loginPage').classList.remove('hidden');
+      $('mainPage').classList.add('hidden');
+    }
+  }
+
+  function doLogin(e) {
+    e.preventDefault();
+    var name = $('loginUsername').value.trim();
+    var pwd = $('loginPassword').value;
+    var errEl = $('loginError');
+    errEl.textContent = '';
+    if (!name || !pwd) { errEl.textContent = '请输入用户名和密码'; return; }
+
+    var u = findUser(name);
+    if (u && u.password === pwd && u.enabled !== false) {
+      state.session = { username: u.username, role: u.role, loginDate: todayStr(), sessionId: genId() };
+      recordSession('后台登录');
+      saveSession();
+      // 本地校验通过后追加建立服务端会话（失败不阻塞登录，兼容离线场景）
+      if (u.role === 'owner' || u.role === 'admin') adminLoginServer(u.username, pwd);
+      showMain();
+      return;
+    }
+
+    // 一次性参观动态码登录：用户名固定 visitor
+    if (name.toLowerCase() === 'visitor') {
+      for (var i = 0; i < db.tickets.length; i++) {
+        var t = db.tickets[i];
+        if (!t.used && t.code === pwd.toUpperCase()) {
+          t.used = true;
+          t.usedAt = nowStr();
+          saveDB();
+          state.session = { username: 'visitor', role: 'guest', loginDate: todayStr(), ticket: t.code, sessionId: genId() };
+          recordSession('参观动态码登录');
+          saveSession();
+          showMain();
+          return;
+        }
+      }
+    }
+
+    errEl.textContent = '用户名或密码错误';
+  }
+
+  function logout() {
+    if (typeof clearGate === 'function') clearGate();
+    // 先通知服务端清除会话 Cookie（失败不阻塞本地登出）
+    try {
+      var p = recRequest('/api/admin-logout', { method: 'POST' });
+      if (p && p.catch) p.catch(function () { });
+    } catch (e) { /* 离线或接口不可用：忽略 */ }
+    ADMIN_SESSION_STATE.authenticated = false;
+    ADMIN_SESSION_STATE.username = '';
+    clearSession();
+    location.reload();
+  }
+
+  // ===== 主界面 =====
+  function showMain() {
+    $('loginPage').classList.add('hidden');
+    $('mainPage').classList.remove('hidden');
+    applyPermissions();
+    renderUserChip();
+    refreshMsgDot();
+    loadSites();
+    loadStats();
+    loadFeedbacks();
+    renderSites();
+    switchPage('dashboard');
+    recStartPolling();
+    // 已登录状态：刷新服务端会话状态行（令牌免填改造第 6 条）
+    if (isAdmin()) checkAdminSession();
+    // 蓝色提示条：每次进入后台展示（关闭后 localStorage 记忆本次不再显示）
+    showTipIfNeeded();
+  }
+
+  function renderUserChip() {
+    var s = state.session;
+    var label = s.username;
+    if (s.role === 'owner') label += '（主管理员）';
+    else if (s.role === 'admin') label += '（管理员）';
+    else if (s.role === 'guest') label += '（参观）';
+    $('userChip').textContent = label;
+  }
+
+  function applyPermissions() {
+    var items = document.querySelectorAll('.nav-item');
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      var roles = it.getAttribute('data-role');
+      if (!roles) { it.classList.remove('hidden'); continue; }
+      var allowed = roles.split(',');
+      var ok = allowed.indexOf(state.session.role) >= 0;
+      it.classList.toggle('hidden', !ok);
+      if (ok && it.classList.contains('active')) switchPage(it.getAttribute('data-page'));
+    }
+    var aiBtn = $('aiSummaryBtn');
+    if (aiBtn) aiBtn.classList.toggle('hidden', !isAdmin());
+    var msgBtn = $('msgBtn');
+    if (msgBtn) msgBtn.classList.toggle('hidden', isGuest());
+  }
+
+  function switchPage(name) {
+    // 敏感面板前置身份验证（登录密码）
+    if (typeof requireGate === 'function' && !requireGate(name)) return;
+    var pages = ['dashboard', 'feedbacks', 'recommendations', 'ops', 'notices', 'usercontrol', 'trash', 'users', 'sms', 'sites', 'settings'];
+    for (var i = 0; i < pages.length; i++) {
+      $('page-' + pages[i]).classList.toggle('hidden', pages[i] !== name);
+    }
+    var navs = document.querySelectorAll('.nav-item');
+    for (var j = 0; j < navs.length; j++) {
+      navs[j].classList.toggle('active', navs[j].getAttribute('data-page') === name);
+    }
+    var titles = { dashboard: '数据看板', feedbacks: '反馈管理', recommendations: '推荐机型', ops: '运营选题', notices: '公告管理', usercontrol: '航站服务台', trash: '回收站', users: '用户管理', sms: '短信管理', sites: '站点管理', settings: '系统设置' };
+    $('pageTitle').textContent = titles[name] || '';
+    if (name === 'dashboard') { loadStats(); renderTrend(); renderRecent(); renderNotes(); refreshLivePanels(); }
+    if (name === 'feedbacks') loadFeedbacks();
+    if (name === 'recommendations') loadRecommendations(false);
+    if (name === 'ops') loadOpsTopics();
+    if (name === 'notices') loadAnnouncements(false);
+    if (name === 'usercontrol') loadUserControl();
+    if (name === 'trash') renderTrash();
+    if (name === 'users') renderUsersPage();
+    if (name === 'sms') renderSmsPage();
+    if (name === 'sites') renderSites();
+    if (name === 'settings') renderSettings();
+  }
+
+  // ===== 访客协助台 =====
+  function ucBase() {
+    return (db && db.settings && db.settings.ucApiBase) ? String(db.settings.ucApiBase).replace(/\/+$/, '') : 'https://henry126923.pages.dev';
+  }
+  function ucStatus(msg) {
+    var el = $('ucStatus');
+    if (el) el.textContent = msg;
+  }
+  function ucRequest(action, opts) {
+    opts = opts || {};
+    var headers = { 'Accept': 'application/json' };
+    var spareToken = (db && db.settings && db.settings.ucMainToken) ? String(db.settings.ucMainToken) : recApiToken();
+    if (spareToken) headers['X-Admin-Token'] = spareToken;
+    if (opts.body) headers['Content-Type'] = 'application/json';
+    var init = { method: opts.method || 'GET', headers: headers, credentials: 'include' };
+    if (opts.body) init.body = JSON.stringify(opts.body);
+    if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) init.signal = AbortSignal.timeout(15000);
+    return fetch(ucBase() + '/api/admin/control?action=' + encodeURIComponent(action), init).then(function (res) {
+      return res.json().then(function (d) {
+        if (!res.ok) {
+          var err = new Error((d && d.message) || ('HTTP ' + res.status));
+          err.status = res.status;
+          throw err;
+        }
+        return d;
+      });
+    });
+  }
+  function ucFillStats(visitors, restrictions, appeals) {
+    var vArr = (visitors && visitors.visitors) || [];
+    var restricted = 0;
+    for (var i = 0; i < vArr.length; i++) if (vArr[i].restricted) restricted++;
+    var rArr = restrictions || [];
+    var aArr = appeals || [];
+    var pending = 0;
+    for (var j = 0; j < aArr.length; j++) if (aArr[j].status === 'pending') pending++;
+    var s1 = $('ucStatVisitors'); if (s1) s1.textContent = vArr.length;
+    var s2 = $('ucStatRestricted'); if (s2) s2.textContent = restricted;
+    var s3 = $('ucStatAppeals'); if (s3) s3.textContent = pending;
+    var s4 = $('ucStatRules'); if (s4) s4.textContent = rArr.length;
+  }
+  function loadUserControl() {
+    ucStatus('正在加载航站服务台数据…');
+    Promise.all([
+      ucRequest('list-visitors', { method: 'GET' }),
+      ucRequest('list-restrictions', { method: 'GET' }),
+      ucRequest('list-appeals', { method: 'GET' })
+    ]).then(function (rs) {
+      ucStatus('已更新：' + new Date().toLocaleTimeString() + '（主站接口正常）');
+      ucFillStats(rs[0] || { visitors: [] }, (rs[1] && rs[1].restrictions) || [], (rs[2] && rs[2].appeals) || []);
+      renderUcVisitors(rs[0] || { visitors: [] });
+      renderUcRules((rs[1] && rs[1].restrictions) || []);
+      renderUcAppeals((rs[2] && rs[2].appeals) || []);
+      updateUcAppealDot();
+    }).catch(function (err) {
+      var st = err && err.status;
+      var hint = '（请确认主站接口可访问）';
+      if (st === 401 || st === 403) hint = '（主站管理令牌缺失或无效，请点击右上角「主站令牌」配置后重试）';
+      ucStatus('连接失败：' + (err && err.message ? err.message : '未知错误') + hint);
+    });
+  }
+  function updateUcAppealDot() {
+    var el = $('ucAppealDot');
+    if (!el) return;
+    var pending = 0;
+    var trs = document.querySelectorAll('#ucAppealTbody tr[data-status="pending"]');
+    for (var i = 0; i < trs.length; i++) pending++;
+    var cnt = $('ucAppealCount');
+    if (cnt) cnt.textContent = pending;
+    el.classList.toggle('hidden', pending === 0);
+  }
+  function ucFmtHash(h) {
+    var s = String(h || '');
+    return s.length > 10 ? s.slice(0, 8) + '…' : (s || '—');
+  }
+  function renderUcVisitors(data) {
+    var rows = data.visitors || [];
+    var tbody = $('ucVisitorTbody');
+    tbody.innerHTML = '';
+    $('ucVisitorEmpty').classList.toggle('hidden', rows.length > 0);
+    rows.forEach(function (v) {
+      var tr = document.createElement('tr');
+      var c1 = document.createElement('td'); c1.textContent = ucFmtHash(v.hash); c1.style.fontFamily = 'monospace';
+      var c2 = document.createElement('td'); c2.textContent = recFmtTime(v.lastVisit);
+      var c3 = document.createElement('td'); c3.textContent = v.visits;
+      var c4 = document.createElement('td'); c4.textContent = (v.country ? v.country : '未知') + (v.ipPrefix ? ' · ' + v.ipPrefix : '');
+      var c5 = document.createElement('td');
+      c5.textContent = v.restricted ? (v.level === 1 ? '受限（用户）' : v.level === 3 ? '受限（全体）' : '受限') : '正常';
+      c5.style.color = v.restricted ? '#ff9d6c' : '#7ee0a3';
+      var c6 = document.createElement('td');
+      var b = document.createElement('button');
+      b.className = 'btn btn-ghost'; b.style.padding = '3px 10px'; b.style.fontSize = '12px';
+      b.textContent = v.restricted ? '解除限制' : '限制此访客';
+      b.addEventListener('click', function () {
+        if (v.restricted) ucUnrestrict('user', v.hash);
+        else ucRestrict('user', v.hash);
+      });
+      c6.appendChild(b);
+      tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c3); tr.appendChild(c4); tr.appendChild(c5); tr.appendChild(c6);
+      tbody.appendChild(tr);
+    });
+  }
+  function renderUcRules(rules) {
+    var tbody = $('ucRuleTbody');
+    tbody.innerHTML = '';
+    $('ucRuleEmpty').classList.toggle('hidden', rules.length > 0);
+    rules.slice().sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); }).forEach(function (r) {
+      var tr = document.createElement('tr');
+      var c1 = document.createElement('td');
+      var scopeName = { user: '单个访客', country: '国家/地区', ipprefix: '市级小区网段', global: '全体访客' }[r.scope] || r.scope;
+      c1.textContent = scopeName;
+      var c2 = document.createElement('td'); c2.textContent = (r.scope === 'global' ? '（全部）' : r.target); c2.style.fontFamily = 'monospace';
+      var c3 = document.createElement('td'); c3.textContent = r.note || r.reason || '';
+      var c4 = document.createElement('td'); c4.textContent = recFmtTime(r.createdAt);
+      var c5 = document.createElement('td');
+      var b = document.createElement('button');
+      b.className = 'btn btn-ghost'; b.style.padding = '3px 10px'; b.style.fontSize = '12px';
+      b.textContent = '解除';
+      b.addEventListener('click', function () { ucUnrestrict(r.scope, r.target); });
+      c5.appendChild(b);
+      tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c3); tr.appendChild(c4); tr.appendChild(c5);
+      tbody.appendChild(tr);
+    });
+  }
+  function renderUcAppeals(appeals) {
+    var tbody = $('ucAppealTbody');
+    tbody.innerHTML = '';
+    $('ucAppealEmpty').classList.toggle('hidden', appeals.length > 0);
+    appeals.forEach(function (a) {
+      var tr = document.createElement('tr');
+      tr.setAttribute('data-status', a.status);
+      var c1 = document.createElement('td'); c1.textContent = recFmtTime(a.createdAt);
+      var c2 = document.createElement('td'); c2.textContent = ucFmtHash(a.visitorHash); c2.style.fontFamily = 'monospace';
+      var c3 = document.createElement('td'); c3.textContent = a.q || '';
+      var c4 = document.createElement('td'); c4.textContent = a.note || '';
+      var c5 = document.createElement('td'); c5.textContent = a.contact || '';
+      var c6 = document.createElement('td');
+      c6.textContent = a.status === 'pending' ? '待处理' : a.status === 'granted' ? '已通过' : '已驳回';
+      c6.style.color = a.status === 'pending' ? '#ffd166' : a.status === 'granted' ? '#7ee0a3' : '#9aa3c0';
+      var c7 = document.createElement('td');
+      if (a.status === 'pending') {
+        var b1 = document.createElement('button');
+        b1.className = 'btn btn-primary'; b1.style.padding = '3px 10px'; b1.style.fontSize = '12px'; b1.style.marginRight = '6px';
+        b1.textContent = '通过并解除';
+        b1.addEventListener('click', function () { ucResolveAppeal(a.id, 'granted'); });
+        var b2 = document.createElement('button');
+        b2.className = 'btn btn-ghost'; b2.style.padding = '3px 10px'; b2.style.fontSize = '12px';
+        b2.textContent = '驳回';
+        b2.addEventListener('click', function () { ucResolveAppeal(a.id, 'denied'); });
+        c7.appendChild(b1); c7.appendChild(b2);
+      } else {
+        c7.textContent = '—';
+      }
+      tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c3); tr.appendChild(c4); tr.appendChild(c5); tr.appendChild(c6); tr.appendChild(c7);
+      tbody.appendChild(tr);
+    });
+  }
+  function ucRestrict(scope, target) {
+    if (scope === 'user' && !target) { alert('缺少访客标识'); return; }
+    if (scope === 'country' && !target) { alert('请填写国家/地区码，如 CN'); return; }
+    if (scope === 'ipprefix' && !target) { alert('请填写市级小区网段前缀，如 113.108.0.0/16 或 113.108.12.0/22'); return; }
+    var note = scope === 'global' ? '' : (window.prompt('填写受限说明（后台提示用，选填）', '') || '');
+    ucRequest('restrict', { method: 'POST', body: { scope: scope, target: target || '', note: note } })
+      .then(function () { ucStatus('已设定协助范围'); loadUserControl(); })
+      .catch(function (err) { ucStatus('操作失败：' + (err && err.message ? err.message : '未知错误')); });
+  }
+  function ucUnrestrict(scope, target) {
+    if (!window.confirm('确认解除该协助范围？')) return;
+    ucRequest('unrestrict', { method: 'POST', body: { scope: scope, target: target || '' } })
+      .then(function () { ucStatus('已解除'); loadUserControl(); })
+      .catch(function (err) { ucStatus('操作失败：' + (err && err.message ? err.message : '未知错误')); });
+  }
+  function ucResolveAppeal(id, action) {
+    ucRequest('resolve-appeal', { method: 'POST', body: { id: id, action: action } })
+      .then(function () { ucStatus(action === 'granted' ? '已通过并解除受限' : '已驳回'); loadUserControl(); })
+      .catch(function (err) { ucStatus('操作失败：' + (err && err.message ? err.message : '未知错误')); });
+  }
+  function initUserControl() {
+    var rb = $('ucRefreshBtn'); if (rb) rb.addEventListener('click', loadUserControl);
+    var tb = $('ucTokenBtn');
+    if (tb) tb.addEventListener('click', function () {
+      var wrap = $('ucTokenWrap');
+      wrap.classList.toggle('hidden');
+      var inp = $('ucTokenInput');
+      if (!wrap.classList.contains('hidden') && inp) inp.value = (db && db.settings && db.settings.ucMainToken) ? String(db.settings.ucMainToken) : '';
+    });
+    var tSave = $('ucTokenSave');
+    if (tSave) tSave.addEventListener('click', function () {
+      var inp = $('ucTokenInput');
+      var val = inp ? inp.value.trim() : '';
+      db.settings.ucMainToken = val;
+      saveDB();
+      $('ucTokenWrap').classList.add('hidden');
+      ucStatus('令牌已保存，正在重连…');
+      loadUserControl();
+    });
+    var tCancel = $('ucTokenCancel');
+    if (tCancel) tCancel.addEventListener('click', function () { $('ucTokenWrap').classList.add('hidden'); });
+    var ab = $('ucAddRuleBtn');
+    if (ab) ab.addEventListener('click', function () { $('ucAddWrap').classList.remove('hidden'); });
+    var cancel = $('ucRuleCancel');
+    if (cancel) cancel.addEventListener('click', function () { $('ucAddWrap').classList.add('hidden'); });
+    var submit = $('ucRuleSubmit');
+    if (submit) submit.addEventListener('click', function () {
+      var type = $('ucRuleType').value;
+      var val = ($('ucRuleValue').value || '').trim();
+      var note = ($('ucRuleNote').value || '').trim();
+      $('ucAddWrap').classList.add('hidden');
+      $('ucRuleValue').value = '';
+      $('ucRuleNote').value = '';
+      if (type === 'global') { ucRestrict('global', ''); return; }
+      if (!val) { alert('请填写目标值'); return; }
+      ucRestrict(type, val);
+    });
+  }
+
+  // ===== 站点 =====
+  function loadSites() {
+    var sel = $('siteSelector');
+    var cur = state.siteId;
+    sel.innerHTML = '<option value="all">全部站点</option>';
+    for (var k in db.settings.siteKeys) {
+      var s = db.settings.siteKeys[k];
+      var op = document.createElement('option');
+      op.value = k; op.textContent = s.name;
+      sel.appendChild(op);
+    }
+    sel.value = cur;
+  }
+  function renderSites() {
+    var tbody = $('siteTbody');
+    tbody.innerHTML = '';
+    var keys = Object.keys(db.settings.siteKeys);
+    if (!keys.length) { $('siteEmpty').classList.remove('hidden'); return; }
+    $('siteEmpty').classList.add('hidden');
+    keys.forEach(function (k) {
+      var s = db.settings.siteKeys[k];
+      var tr = document.createElement('tr');
+      var d = document.createElement('td'); d.textContent = s.name;
+      var u = document.createElement('td');
+      var a = document.createElement('a');
+      a.href = s.url || '#'; a.target = '_blank'; a.textContent = s.url || '-';
+      a.style.color = '#7cb3ff'; a.style.textDecoration = 'none';
+      u.appendChild(a);
+      var kk = document.createElement('td'); kk.textContent = k;
+      var t = document.createElement('td'); t.textContent = s.createdAt || '-';
+      var o = document.createElement('td');
+      var del = document.createElement('button');
+      del.className = 'btn btn-danger btn-sm'; del.textContent = '删除';
+      del.onclick = function () {
+        if (confirm('确认删除站点「' + s.name + '」？相关反馈会保留，仅移除站点配置。')) {
+          delete db.settings.siteKeys[k];
+          saveDB(); loadSites(); renderSites(); loadFeedbacks();
+        }
+      };
+      o.appendChild(del);
+      tr.appendChild(d); tr.appendChild(u); tr.appendChild(kk); tr.appendChild(t); tr.appendChild(o);
+      tbody.appendChild(tr);
+    });
+  }
+  function addSite(e) {
+    e.preventDefault();
+    var name = $('siteName').value.trim();
+    var url = $('siteUrl').value.trim();
+    if (!name) { alert('请输入站点名称'); return; }
+    var key = genSiteKey();
+    db.settings.siteKeys[key] = { name: name, url: url, createdAt: nowStr() };
+    saveDB();
+    $('siteName').value = ''; $('siteUrl').value = '';
+    $('siteModal').classList.add('hidden');
+    loadSites(); renderSites();
+  }
+
+
+  // ===== 通用时间格式化（反馈列表 / 实时面板共用） =====
+  function isoFmtTime(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  // ===== 自营后台数据拉取（不依赖任何第三方平台） =====
+  // ===== 实时面板数据源（自营后台接口） =====
+
+
+  // ===== 推荐机型（管理端接口：/api/recommendations、/api/review、/api/news） =====
+  var REC_API_DEFAULT = 'https://henry126923-admincenter.pages.dev';
+  var REC_POLL_MS = 60000;
+  var REC_STATE = { items: [], loading: false, error: '', filter: 'all', lastSync: '', timer: null, review: null };
+  var NEWS_STATE = { items: [], updatedAt: '', source: '', error: '', loaded: false, detailIndex: -1 };
+  var LIVE_FB = { items: [], ts: '' };
+
+  function recApiBase() {
+    var b = (db && db.settings && db.settings.adminApiBase) ? String(db.settings.adminApiBase) : '';
+    if (!b) b = REC_API_DEFAULT;
+    return b.replace(/\/+$/, '');
+  }
+  function recApiToken() {
+    return (db && db.settings && db.settings.adminToken) ? String(db.settings.adminToken) : '';
+  }
+  function recStatusText(st) {
+    if (st === 'approved') return '已采纳';
+    if (st === 'rejected') return '已驳回';
+    return '待审核';
+  }
+  function recPad2(n) { return (n < 10 ? '0' : '') + n; }
+  /** 时间统一格式化为「YYYY-MM-DD HH:mm」；字段缺失或非法时返回「—」 */
+  function recFmtTime(t) {
+    if (t === null || t === undefined) return '—';
+    var d = null;
+    if (typeof t === 'number' && isFinite(t)) {
+      d = new Date(t < 1e12 ? t * 1000 : t);
+    } else {
+      var s = String(t).trim();
+      if (!s) return '—';
+      if (/^\d+$/.test(s)) {
+        var n = parseInt(s, 10);
+        d = new Date(s.length <= 10 ? n * 1000 : n);
+      } else {
+        d = new Date(s.replace(' ', 'T'));
+      }
+    }
+    if (!d || isNaN(d.getTime())) return '—';
+    return d.getFullYear() + '-' + recPad2(d.getMonth() + 1) + '-' + recPad2(d.getDate())
+      + ' ' + recPad2(d.getHours()) + ':' + recPad2(d.getMinutes());
+  }
+  function recImgUrl(img) {
+    if (!img) return '';
+    var s = String(img);
+    if (/^data:/i.test(s) || /^https?:\/\//i.test(s)) return s;
+    if (s.charAt(0) === '/') return recApiBase() + s;
+    return s;
+  }
+  function recExtractList(data, keys) {
+    if (Array.isArray(data)) return data;
+    if (data && typeof data === 'object') {
+      for (var i = 0; i < keys.length; i++) {
+        if (Array.isArray(data[keys[i]])) return data[keys[i]];
+      }
+    }
+    return [];
+  }
+  function recRequest(path, opts) {
+    opts = opts || {};
+    var headers = { 'Accept': 'application/json' };
+    // 备用令牌仅在填写时附加；主用鉴权为服务端会话 Cookie（credentials: same-origin）
+    var spareToken = recApiToken();
+    if (spareToken) headers['X-Admin-Token'] = spareToken;
+    if (opts.body) headers['Content-Type'] = 'application/json';
+    var init = { method: opts.method || 'GET', headers: headers, credentials: 'same-origin' };
+    if (opts.body) init.body = JSON.stringify(opts.body);
+    if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) init.signal = AbortSignal.timeout(15000);
+    return fetch(recApiBase() + path, init).then(function (res) {
+      return res.text().then(function (txt) {
+        var data = null;
+        try { data = txt ? JSON.parse(txt) : null; } catch (e) { data = null; }
+        if (!res.ok) {
+          var em = (data && (data.error || data.message)) ? (data.error || data.message) : ('HTTP ' + res.status);
+          var err = new Error(em);
+          err.status = res.status;
+          throw err;
+        }
+        if (data === null) throw new Error('返回数据格式异常');
+        return data;
+      });
+    });
+  }
+  // ===== 服务端会话（令牌免填） =====
+  var ADMIN_SESSION_STATE = { loading: false, authenticated: false, username: '', checked: false };
+
+  /** POST /api/admin-login：用用户名 + 密码（或令牌本身）换取服务端会话 Cookie */
+  function postAdminLogin(username, password) {
+    return recRequest('/api/admin-login', {
+      method: 'POST',
+      body: { username: username, password: password }
+    });
+  }
+
+  /** 建立服务端会话（失败不阻塞本地登录 / 本地配置保存） */
+  function adminLoginServer(username, password) {
+    try {
+      return postAdminLogin(username, password).then(function (data) {
+        if (data && data.ok === false) {
+          console.warn('[admin-login] 服务端会话未建立：', data.error || data.code || '');
+          renderAdminSessionState(false);
+          return null;
+        }
+        return checkAdminSession();
+      }).catch(function (err) {
+        console.warn('[admin-login] 服务端会话建立失败：', (err && err.message) ? err.message : err);
+        renderAdminSessionState(false);
+        return null;
+      });
+    } catch (e) {
+      console.warn('[admin-login] 服务端会话建立异常：', e);
+      return null;
+    }
+  }
+
+  /** 用「备用令牌 / 会话令牌」作为密码换取服务端会话（免密入口链接、手动填令牌后调用） */
+  function adminLoginWithToken(token) {
+    var tk = String(token || '').trim();
+    if (!tk) return null;
+    var uname = (state.session && state.session.username) ? state.session.username : 'henry';
+    return adminLoginServer(uname, tk);
+  }
+
+  /** GET /api/admin-session：刷新服务端会话状态行 */
+  function checkAdminSession() {
+    var box = $('adminSessionState');
+    if (!box) return null;
+    ADMIN_SESSION_STATE.loading = true;
+    box.className = 'session-state';
+    box.textContent = '服务端会话：检测中…';
+    try {
+      return recRequest('/api/admin-session').then(function (data) {
+        ADMIN_SESSION_STATE.loading = false;
+        ADMIN_SESSION_STATE.checked = true;
+        ADMIN_SESSION_STATE.authenticated = !!(data && data.authenticated);
+        ADMIN_SESSION_STATE.username = (data && data.username) ? String(data.username) : '';
+        renderAdminSessionState(false);
+        return data;
+      }).catch(function (err) {
+        ADMIN_SESSION_STATE.loading = false;
+        ADMIN_SESSION_STATE.checked = true;
+        ADMIN_SESSION_STATE.authenticated = false;
+        ADMIN_SESSION_STATE.username = '';
+        renderAdminSessionState(true);
+        console.warn('[admin-session] 检测失败：', (err && err.message) ? err.message : err);
+        return null;
+      });
+    } catch (e) {
+      ADMIN_SESSION_STATE.loading = false;
+      ADMIN_SESSION_STATE.checked = true;
+      renderAdminSessionState(true);
+      return null;
+    }
+  }
+
+  /** 渲染状态行：服务端会话：已连接（henry）/ 未连接 */
+  function renderAdminSessionState(isError) {
+    var box = $('adminSessionState');
+    if (!box) return;
+    if (ADMIN_SESSION_STATE.loading) {
+      box.className = 'session-state';
+      box.textContent = '服务端会话：检测中…';
+      return;
+    }
+    if (ADMIN_SESSION_STATE.authenticated) {
+      box.className = 'session-state ok';
+      box.textContent = '服务端会话：已连接' + (ADMIN_SESSION_STATE.username ? '（' + ADMIN_SESSION_STATE.username + '）' : '');
+      return;
+    }
+    box.className = 'session-state err';
+    box.textContent = isError ? '服务端会话：检测失败' : '服务端会话：未连接';
+  }
+
+  /** 页面初始化：URL 含 ?k=<会话令牌> 时用它换取会话，并立即从地址栏移除该参数（保留其他参数） */
+  function consumeUrlSessionKey() {
+    var search = location.search || '';
+    if (search.indexOf('k=') < 0) return;
+    var qs = search.charAt(0) === '?' ? search.slice(1) : search;
+    var parts = qs ? qs.split('&') : [];
+    var key = '';
+    var rest = [];
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      if (!p) continue;
+      if (p.indexOf('k=') === 0) { key = p.slice(2); continue; }
+      rest.push(p);
+    }
+    if (!key) return;
+    // 无论成功失败都先从地址栏移除，避免令牌残留在浏览历史中
+    var clean = location.pathname + (rest.length ? '?' + rest.join('&') : '') + (location.hash || '');
+    try { history.replaceState(null, '', clean); } catch (e) { /* 移除失败不影响会话建立 */ }
+    var raw = key;
+    try { raw = decodeURIComponent(key); } catch (e2) { raw = key; }
+    if (!raw) return;
+    var uname = (state.session && state.session.username) ? state.session.username : 'henry';
+    var chain = adminLoginServer(uname, raw);
+    if (chain && chain.then) {
+      chain.then(function () {
+        // 会话建立后，重新拉取需要管理权限的数据（仅本地已登录的管理员；与主站公开接口无关）
+        if (ADMIN_SESSION_STATE.authenticated && isAdmin()) {
+          loadNews(true);
+          loadRecommendations(true);
+        }
+      });
+    }
+  }
+
+  /** 复制免密入口链接：当前页面地址 + ?k=<当前填写的会话令牌> */
+  function copySessionLink() {
+    var input = $('apiTokenInput');
+    var msg = $('apiMsg');
+    var token = input ? String(input.value || '').trim() : '';
+    if (!token) {
+      if (msg) { msg.className = 'form-msg err'; msg.textContent = '请先在上方填写会话令牌，再复制免密入口链接'; }
+      return;
+    }
+    var link = location.origin + location.pathname + '?k=' + encodeURIComponent(token);
+    function done() { if (msg) { msg.className = 'form-msg ok'; msg.textContent = '免密入口链接已复制：打开即自动登录'; } }
+    function fallback() {
+      if (legacyCopyText(link)) { done(); return; }
+      if (msg) { msg.className = 'form-msg err'; msg.textContent = '复制失败，请手动复制：' + link; }
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(done).catch(fallback);
+        return;
+      }
+    } catch (e) { /* 剪贴板 API 不可用 → 走兜底 */ }
+    fallback();
+  }
+
+  /** 剪贴板兜底：临时 textarea + execCommand('copy') */
+  function legacyCopyText(text) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', 'readonly');
+      ta.style.position = 'fixed';
+      ta.style.top = '-1000px';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return !!ok;
+    } catch (e) { return false; }
+  }
+
+  function loadRecommendations(force) {
+    var status = $('recStatus');
+    if (!status || REC_STATE.loading) return;
+    if (isGuest()) return;
+    if (!REC_STATE.items.length || force) {
+      status.className = 'list-status';
+      status.innerHTML = '<span class="hint-note">正在从管理端接口拉取推荐机型…</span>';
+    }
+    REC_STATE.loading = true;
+    recRequest('/api/recommendations').then(function (data) {
+      REC_STATE.items = recExtractList(data, ['items', 'data', 'list', 'recommendations']);
+      REC_STATE.error = '';
+      REC_STATE.lastSync = nowStr();
+      renderRecommendations();
+      renderLiveRec();
+    }).catch(function (err) {
+      REC_STATE.error = (err && err.message) ? err.message : '未知错误';
+      renderRecommendations();
+      renderLiveRec();
+    }).finally(function () { REC_STATE.loading = false; });
+  }
+  function filteredRecommendations() {
+    return REC_STATE.items.filter(function (r) {
+      if (REC_STATE.filter !== 'all' && (r.status || 'pending') !== REC_STATE.filter) return false;
+      return true;
+    });
+  }
+  function renderRecommendations() {
+    var list = $('recList');
+    var status = $('recStatus');
+    if (!list || !status) return;
+    var all = REC_STATE.items;
+    var labels = { all: '全部', pending: '待审核', approved: '已采纳', rejected: '已驳回' };
+    var counts = { all: all.length, pending: 0, approved: 0, rejected: 0 };
+    for (var i = 0; i < all.length; i++) {
+      var st = all[i].status || 'pending';
+      if (counts[st] === undefined) counts[st] = 0;
+      counts[st]++;
+    }
+    var chips = document.querySelectorAll('#recChips .chip');
+    for (var c = 0; c < chips.length; c++) {
+      var key = chips[c].getAttribute('data-rec');
+      chips[c].textContent = (labels[key] || key) + '（' + (counts[key] || 0) + '）';
+      chips[c].classList.toggle('active', key === REC_STATE.filter);
+    }
+    if (REC_STATE.error) {
+      list.innerHTML = '<div class="list-err">拉取失败：' + esc(REC_STATE.error)
+        + '<br>请确认「系统设置 → 推荐机型接口配置」中的后端地址与管理令牌，然后点击「刷新列表」重试。</div>';
+      status.className = 'list-status';
+      status.innerHTML = '<span class="hint-note">同步异常' + (REC_STATE.lastSync ? '（上次成功：' + esc(REC_STATE.lastSync) + '）' : '') + '</span>';
+      return;
+    }
+    var shown = filteredRecommendations();
+    status.className = 'list-status';
+    status.innerHTML = '<span class="hint-note">共 ' + all.length + ' 条推荐，当前筛选 ' + shown.length + ' 条 · 上次同步 ' + esc(REC_STATE.lastSync || '—') + ' · 每 60 秒自动刷新</span>';
+    if (!shown.length) {
+      list.innerHTML = '<p class="empty">暂无推荐机型记录</p>';
+      return;
+    }
+    var html = '';
+    for (var j = 0; j < shown.length; j++) {
+      var r = shown[j];
+      var stt = r.status || 'pending';
+      var rawImg = r.image || r.imageUrl || (r.image_key ? ('/api/image/' + r.image_key) : '');
+      var img = recImgUrl(rawImg);
+      var specs = r.specs ? (typeof r.specs === 'string' ? r.specs : JSON.stringify(r.specs)) : '';
+      html += '<div class="rec-item">'
+        + '<div class="rec-thumb">' + (img ? '<img src="' + esc(img) + '" alt="机型照片" loading="lazy">' : '暂无照片') + '</div>'
+        + '<div class="rec-main">'
+        + '<div class="rec-name">' + esc(r.nameZh || '（无名）') + '</div>'
+        + '<div class="rec-meta">型号：' + esc(r.code || '—') + ' · 分类：' + esc(r.category || '—') + ' · 国家/地区：' + esc(r.country || '—') + '</div>'
+        + '<div class="rec-meta">提交人匿名ID：<span class="rec-uid">' + esc(r.uid || '—') + '</span> · 提交时间：' + esc(recFmtTime(r.submittedAt)) + ' · 审核时间：' + esc(recFmtTime(r.reviewedAt)) + '</div>'
+        + (r.descZh ? '<div class="rec-desc">' + esc(r.descZh) + '</div>' : '')
+        + (specs ? '<div class="rec-desc">规格：' + esc(specs) + '</div>' : '')
+        + '<div class="rec-reply">管理员反馈：' + esc(r.reply ? r.reply : '—') + '</div>'
+        + '<div class="rec-ai-advice" id="recAiAdvice-' + esc(r.id) + '"></div>'
+        + '</div>'
+        + '<div class="rec-side">'
+        + '<span class="rec-status ' + stt + '">' + recStatusText(stt) + '</span>'
+        + '<div class="rec-actions">'
+        + '<button class="btn btn-primary btn-sm" data-rec-act="approved" data-id="' + esc(r.id) + '">采纳</button>'
+        + '<button class="btn btn-danger btn-sm" data-rec-act="rejected" data-id="' + esc(r.id) + '">驳回</button>'
+        + '</div>'
+        + (stt === 'pending' ? '<button class="btn btn-sm btn-ghost" data-ai-audit="' + esc(r.id) + '">AI 预审</button>' : '')
+        + '<span class="live-sub">审核时间 ' + esc(recFmtTime(r.reviewedAt)) + '</span>'
+        + '</div></div>';
+    }
+    list.innerHTML = html;
+    var imgs = list.querySelectorAll('.rec-thumb img');
+    for (var m = 0; m < imgs.length; m++) {
+      imgs[m].addEventListener('error', function () {
+        this.style.display = 'none';
+        if (this.parentNode) this.parentNode.textContent = '暂无照片';
+      });
+    }
+  }
+  function openRecReview(id, status) {
+    var item = null;
+    for (var i = 0; i < REC_STATE.items.length; i++) {
+      if (String(REC_STATE.items[i].id) === String(id)) { item = REC_STATE.items[i]; break; }
+    }
+    REC_STATE.review = { id: id, status: status };
+    $('recModalTitle').textContent = (status === 'approved' ? '采纳' : '驳回') + '推荐机型';
+    $('recModalDesc').textContent = '机型：' + (item ? ((item.nameZh || '（无名）') + (item.code ? '（' + item.code + '）' : '')) : id) + '。反馈内容将展示给提交用户。';
+    $('recReplyInput').value = (item && item.reply) ? item.reply : '';
+    $('recModal').classList.remove('hidden');
+    $('recReplyInput').focus();
+  }
+  function closeRecReview() {
+    $('recModal').classList.add('hidden');
+    REC_STATE.review = null;
+  }
+  function submitRecReview(e) {
+    e.preventDefault();
+    var rv = REC_STATE.review;
+    if (!rv) return;
+    var reply = $('recReplyInput').value.trim();
+    var btn = $('recSubmitBtn');
+    btn.disabled = true;
+    btn.textContent = '提交中…';
+    recRequest('/api/review', { method: 'POST', body: { id: rv.id, status: rv.status, reply: reply } }).then(function () {
+      for (var i = 0; i < REC_STATE.items.length; i++) {
+        if (String(REC_STATE.items[i].id) === String(rv.id)) {
+          REC_STATE.items[i].status = rv.status;
+          REC_STATE.items[i].reply = reply;
+          REC_STATE.items[i].reviewedAt = nowStr();
+        }
+      }
+      renderRecommendations();
+      renderLiveRec();
+      closeRecReview();
+      alert(rv.status === 'approved' ? '已采纳，该机型将出现在主站「已采纳机型」列表中。' : '已驳回，反馈内容已写回后端。');
+    }).catch(function (err) {
+      alert('提交失败：' + ((err && err.message) ? err.message : '未知错误'));
+    }).finally(function () {
+      btn.disabled = false;
+      btn.textContent = '提交反馈';
+    });
+  }
+  function loadNews(force) {
+    if (NEWS_STATE.loaded && !force) return Promise.resolve(false);
+    if (isGuest()) return Promise.resolve(false);
+    return recRequest('/api/news').then(function (data) {
+      NEWS_STATE.items = recExtractList(data, ['items', 'data', 'list', 'news']);
+      NEWS_STATE.updatedAt = (data && (data.updatedAt || data.date)) ? (data.updatedAt || data.date) : '';
+      NEWS_STATE.source = (data && data.source) ? String(data.source) : '';
+      NEWS_STATE.error = '';
+      NEWS_STATE.loaded = true;
+      renderLiveNews();
+      return true;
+    }).catch(function (err) {
+      NEWS_STATE.error = (err && err.message) ? err.message : '未知错误';
+      NEWS_STATE.loaded = true;
+      renderLiveNews();
+      return false;
+    });
+  }
+  /** 立即刷新快讯：POST /api/news-refresh（带 X-Admin-Token）→ 成功后重拉 /api/news */
+  function refreshNewsNow() {
+    var btn = $('newsRefreshBtn');
+    if (!btn || btn.disabled) return;
+    if (isGuest()) {
+      alert('访客模式下无法刷新快讯，请使用管理员账号登录。');
+      return;
+    }
+    if (!recApiToken()) {
+      alert('请先在「系统设置 → 推荐机型接口配置」中填写管理令牌（X-Admin-Token），再刷新快讯。');
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = '刷新中…';
+    recRequest('/api/news-refresh', { method: 'POST' }).then(function (data) {
+      if (data && data.ok === false) throw new Error((data && (data.error || data.message)) || '服务端返回失败');
+      var cnt = (data && typeof data.count === 'number')
+        ? data.count
+        : ((data && Array.isArray(data.items)) ? data.items.length : 0);
+      var at = recFmtTime(data && (data.updatedAt || data.date));
+      return loadNews(true).then(function () {
+        alert('快讯已刷新：共 ' + cnt + ' 条 · 更新时间 ' + at);
+      });
+    }).catch(function (err) {
+      alert('刷新快讯失败：' + ((err && err.message) ? err.message : '未知错误'));
+    }).finally(function () {
+      btn.disabled = false;
+      btn.textContent = '立即刷新快讯';
+    });
+  }
+  /** 统一时间展示：ISO 字符串 → YYYY-MM-DD HH:mm（各实时面板共用，不再依赖任何外部格式化函数） */
+  function liveFmtTime(t) {
+    if (!t) return '';
+    var s = String(t);
+    if (s.indexOf('T') < 0) return s;
+    var d = new Date(s);
+    if (isNaN(d.getTime())) return s;
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  function liveRows(items, mapFn, emptyText) {
+    if (!items || !items.length) return '<div class="live-empty">' + esc(emptyText) + '</div>';
+    var html = '';
+    var n = Math.min(items.length, 4);
+    for (var i = 0; i < n; i++) html += mapFn(items[i], i);
+    return html;
+  }
+  function renderLiveRec() {
+    var box = $('liveRecList');
+    if (!box) return;
+    var recs = REC_STATE.items.slice().sort(function (a, b) {
+      return String(b.submittedAt || '').localeCompare(String(a.submittedAt || ''));
+    });
+    if (REC_STATE.error && !recs.length) {
+      box.innerHTML = '<div class="list-err">接口暂不可用：' + esc(REC_STATE.error) + '</div>';
+    } else {
+      box.innerHTML = liveRows(recs, function (r) {
+        return '<div class="live-item"><span class="live-tag">' + recStatusText(r.status || 'pending') + '</span>'
+          + '<span class="live-title">' + esc(r.nameZh || '（无名）') + (r.code ? '（' + esc(r.code) + '）' : '') + '</span>'
+          + '<span class="live-time">' + esc(recFmtTime(r.submittedAt)) + '</span></div>';
+      }, '暂无推荐机型');
+    }
+    var t = $('liveRecTime');
+    if (t) t.textContent = REC_STATE.lastSync ? ('同步于 ' + REC_STATE.lastSync) : '未同步';
+    renderLiveStats();
+  }
+  /** 数据看板 · 最新站内反馈（数据来源：自营后台 GET /api/feedback） */
+  function renderLiveFb() {
+    var box = $('liveFbList');
+    if (!box) return;
+    var items = LIVE_FB.items || [];
+    box.innerHTML = liveRows(items, function (it) {
+      return '<div class="live-item"><span class="live-tag">' + esc(fbStatusText(it)) + '</span>'
+        + '<span class="live-title">' + esc(it.content || '（无内容）') + '</span>'
+        + '<span class="live-time">' + esc(isoFmtTime(it.createdAt)) + '</span></div>';
+    }, '暂无站内反馈');
+    var t = $('liveFbTime');
+    if (t) t.textContent = LIVE_FB.ts ? ('同步于 ' + LIVE_FB.ts) : '未同步';
+    renderLiveStats();
+  }
+  /**
+   * 运营数据总览统计卡：统一取自「自有后台」单一数据口径 ——
+   * 站内反馈来自 db.feedbacks（GET /api/feedback 合并本地留底），推荐机型来自 REC_STATE.items。
+   * 全部为自营后台单一数据口径，不引用任何第三方平台数据源。
+   */
+  function renderLiveStats() {
+    var recs = REC_STATE.items || [];
+    var pending = 0, approved = 0, rejected = 0;
+    for (var i = 0; i < recs.length; i++) {
+      var st = recs[i].status || 'pending';
+      if (st === 'approved') approved++;
+      else if (st === 'rejected') rejected++;
+      else pending++;
+    }
+    var elRec = $('statRecTotal');
+    if (elRec) elRec.textContent = recs.length;
+    var elPend = $('statRecPending');
+    if (elPend) elPend.textContent = pending;
+    var elRev = $('statRecReviewed');
+    if (elRev) elRev.textContent = approved + ' / ' + rejected;
+
+    var list = db.feedbacks || [];
+    var fbNew = 0, fbDoing = 0, fbDone = 0, fbReplied = 0;
+    list.forEach(function (f) {
+      var k = fbStatusKey(f);
+      if (k === 'new') fbNew++;
+      else if (k === 'doing') fbDoing++;
+      else fbDone++;
+      if ((f.reply || '').trim()) fbReplied++;
+    });
+    var setTxt = function (id, v) { var el = $(id); if (el) el.textContent = v; };
+    setTxt('statFbTotal', list.length);
+    setTxt('statFbPending', fbNew);
+    setTxt('statFbDoing', fbDoing);
+    setTxt('statFbDone', fbDone);
+    var src = $('statFbSrc');
+    if (src) src.textContent = '来源：自有后台 · GET /api/feedback' + (LIVE_FB.ts ? (' · 同步于 ' + LIVE_FB.ts) : '（含本地留底）');
+    var rsrc = $('statFbReplySrc');
+    if (rsrc) rsrc.textContent = '进度：done · 其中已回复 ' + fbReplied + ' 条';
+  }
+  /** 归一化单条快讯字段：标题 / 内容简介 / 时间 / 原文链接 */
+  function newsField(n, keys) {
+    if (typeof n === 'string') return (keys[0] === 'title') ? n : '';
+    for (var i = 0; i < keys.length; i++) {
+      var v = n ? n[keys[i]] : '';
+      if (v !== undefined && v !== null && String(v).trim() !== '') return String(v);
+    }
+    return '';
+  }
+  function newsTitle(n) { return newsField(n, ['title', 'name', 'text']); }
+  function newsSnippet(n) { return newsField(n, ['snippet', 'summary', 'description', 'desc', 'content']); }
+  function newsTime(n) { return newsField(n, ['time', 'date', 'publishedAt', 'pubDate']); }
+  function newsUrl(n) { return newsField(n, ['url', 'link']); }
+
+  /**
+   * 首页快讯列表：每条展示 标题 + 内容简介（2 行截断）+ 时间，
+   * 整条可点击 → 打开「内容简介详情」弹窗查看完整简介与原文入口。
+   */
+  function renderLiveNews() {
+    var box = $('liveNewsList');
+    if (!box) return;
+    var items = NEWS_STATE.items || [];
+    if (NEWS_STATE.error && !items.length) {
+      box.innerHTML = '<div class="list-err">快讯接口暂不可用：' + esc(NEWS_STATE.error) + '</div>';
+    } else if (!items.length) {
+      box.innerHTML = '<div class="live-empty">今日暂无航空快讯</div>';
+    } else {
+      var n = Math.min(items.length, 8);
+      var html = '';
+      for (var i = 0; i < n; i++) {
+        var it = items[i];
+        var title = newsTitle(it) || '（无标题）';
+        var snip = newsSnippet(it);
+        var url = newsUrl(it);
+        var inner = url
+          ? '<a class="live-title" href="' + esc(url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation();">' + esc(title) + '</a>'
+          : '<span class="live-title">' + esc(title) + '</span>';
+        html += '<div class="live-item news-item" data-news-idx="' + i + '" title="点击查看内容简介">'
+          + '<div class="news-row">' + inner + '<span class="live-time">' + esc(liveFmtTime(newsTime(it))) + '</span></div>'
+          + (snip
+            ? '<p class="live-snippet">' + esc(snip) + '</p>'
+            : '<p class="live-snippet empty">暂无内容简介，点击查看详情</p>')
+          + '</div>';
+      }
+      box.innerHTML = html;
+      var rows = box.querySelectorAll('.news-item');
+      for (var k = 0; k < rows.length; k++) {
+        rows[k].addEventListener('click', function () {
+          openNewsDetail(Number(this.getAttribute('data-news-idx')));
+        });
+      }
+    }
+    var t = $('liveNewsTime');
+    if (t) t.textContent = NEWS_STATE.error ? '同步失败' : (NEWS_STATE.updatedAt ? ('更新于 ' + recFmtTime(NEWS_STATE.updatedAt)) : '未同步');
+  }
+
+  /** 打开快讯详情弹窗：完整内容简介 + 来源/时间 + 阅读原文 */
+  function openNewsDetail(idx) {
+    var it = (NEWS_STATE.items || [])[idx];
+    var modal = $('newsModal');
+    if (!it || !modal) return;
+    NEWS_STATE.detailIndex = idx;
+    var snip = newsSnippet(it);
+    var url = newsUrl(it);
+    var time = newsTime(it);
+    $('newsModalTitle').textContent = newsTitle(it) || '快讯详情';
+    $('newsModalMeta').textContent = '来源：' + (NEWS_STATE.source || '航空快讯')
+      + (time ? (' · ' + liveFmtTime(time)) : '')
+      + (NEWS_STATE.updatedAt ? (' · 同步于 ' + recFmtTime(NEWS_STATE.updatedAt)) : '');
+    $('newsModalBody').textContent = snip || '该条快讯未提供内容简介，可点击「阅读原文」查看完整内容。';
+    var link = $('newsModalLink');
+    if (url) {
+      link.href = url;
+      link.style.display = '';
+    } else {
+      link.removeAttribute('href');
+      link.style.display = 'none';
+    }
+    modal.classList.remove('hidden');
+  }
+  function closeNewsDetail() {
+    var modal = $('newsModal');
+    if (modal) modal.classList.add('hidden');
+    NEWS_STATE.detailIndex = -1;
+  }
+  /** 数据看板 · 最新站内反馈（单一数据口径：db.feedbacks，即自营后台 GET /api/feedback 合并本地留底） */
+  function loadLiveFb() {
+    var list = (db.feedbacks || []).slice();
+    list.sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); });
+    LIVE_FB.items = list.slice(0, 5);
+    LIVE_FB.ts = nowStr();
+    renderLiveFb();
+  }
+  function refreshLivePanels() {
+    loadRecommendations(false);
+    loadNews(false);
+    loadLiveFb();
+  }
+  function recStartPolling() {
+    if (REC_STATE.timer) return;
+    REC_STATE.timer = setInterval(function () {
+      if ($('mainPage').classList.contains('hidden') || isGuest()) return;
+      loadRecommendations(false);
+      renderRecommendations();
+    }, REC_POLL_MS);
+  }
+  function saveApiConfig() {
+    var base = $('apiBaseInput').value.trim();
+    var token = $('apiTokenInput').value.trim();
+    var msg = $('apiMsg');
+    if (base && !/^https?:\/\//i.test(base)) {
+      msg.className = 'form-msg err';
+      msg.textContent = '后端地址需以 http:// 或 https:// 开头';
+      return;
+    }
+    db.settings.adminApiBase = base.replace(/\/+$/, '');
+    db.settings.adminToken = token;
+    saveDB();
+    msg.className = 'form-msg ok';
+    msg.textContent = token ? '配置已保存，正在建立服务端会话…' : '配置已保存，正在重新拉取…';
+    // ②(b) 填了会话令牌时，保存后立即用它换取服务端会话并刷新状态行（失败不阻断本地配置）
+    if (token) adminLoginWithToken(token);
+    loadRecommendations(true);
+    loadNews(true);
+    setTimeout(function () {
+      var m = $('apiMsg');
+      if (m && m.className.indexOf('ok') >= 0) m.textContent = '配置已保存';
+    }, 2000);
+  }
+  function saveSmsConfig() {
+    var msg = $('smsMsg');
+    if (!msg) return;
+    var enabled = $('smsEnabledInput').checked;
+    var sel = $('smsTemplateSelect');
+    var tpl = '';
+    if (sel.value === 'custom') {
+      tpl = $('smsTemplateCustomInput').value.trim();
+      if (!/^[0-9]{5,8}$/.test(tpl)) {
+        msg.className = 'form-msg err';
+        msg.textContent = '请填写有效的阿里云短信模板 Code（5~8 位数字）';
+        return;
+      }
+    } else {
+      tpl = sel.value;
+    }
+    db.settings.smsEnabled = enabled;
+    db.settings.smsTemplateCode = tpl;
+    var qIn = $('smsQuotaInput');
+    var q = qIn ? parseInt(qIn.value, 10) : NaN;
+    if (!isNaN(q) && q >= 0) db.settings.smsQuota = q;
+    saveDB();
+    msg.className = 'form-msg ok';
+    msg.textContent = (enabled ? '已开启' : '已关闭') + '手机号自动发送验证码，模板 Code：' + tpl + '；短信额度：' + smsQuota();
+    setTimeout(function () {
+      var m = $('smsMsg');
+      if (m && m.className.indexOf('ok') >= 0) m.textContent = '配置已保存';
+    }, 2000);
+  }
+  // ===== 短信管理 =====
+  var SMS_RECORDS_KEY = 'test_sms_records';
+  var TIP_HIDE_KEY = 'aa_tip_hidden_v1';
+  function smsRecords() {
+    var arr = readStored(SMS_RECORDS_KEY, []);
+    return Array.isArray(arr) ? arr : [];
+  }
+  function saveSmsRecords(arr) { writeStored(SMS_RECORDS_KEY, arr); }
+  function smsQuota() {
+    var q = (db && db.settings && db.settings.smsQuota);
+    q = (q === undefined || q === null) ? 1000 : parseInt(q, 10);
+    return isNaN(q) ? 1000 : q;
+  }
+  function smsMaskPhone(v) {
+    v = String(v || '').trim();
+    if (!v) return '—';
+    return /^1[3-9]\d{9}$/.test(v) ? v.slice(0, 3) + '****' + v.slice(7) : (v.length > 1 ? v.slice(0, 1) + '****' : v);
+  }
+  function renderSmsQuota() {
+    var el = $('smsQuotaNum'); if (el) el.textContent = smsQuota();
+    var cost = $('smsCostNum'); if (cost) cost.textContent = (db.settings.smsLastCost || 0);
+    var recs = smsRecords();
+    var sent = 0;
+    for (var i = 0; i < recs.length; i++) {
+      if (recs[i].status === '成功' || recs[i].status === '已回执' || recs[i].status === '已发送') sent++;
+    }
+    var s2 = $('smsSentNum'); if (s2) s2.textContent = sent;
+  }
+  function renderSmsPage() {
+    renderSmsQuota();
+    renderSmsRecords();
+  }
+  function renderSmsRecords() {
+    var tbody = $('smsRecTbody');
+    if (!tbody) return;
+    var arr = smsRecords();
+    tbody.innerHTML = '';
+    var empty = $('smsRecEmpty'); if (empty) empty.classList.toggle('hidden', arr.length > 0);
+    var cnt = $('smsRecCount'); if (cnt) cnt.textContent = arr.length;
+    arr.slice().sort(function (a, b) { return String(b.time).localeCompare(String(a.time)); }).forEach(function (r) {
+      var tr = document.createElement('tr');
+      var c1 = document.createElement('td'); c1.textContent = r.time || '';
+      var c2 = document.createElement('td'); c2.textContent = smsMaskPhone(r.phone);
+      var c3 = document.createElement('td'); c3.textContent = r.templateCode || '';
+      var c4 = document.createElement('td'); c4.textContent = r.bizId || '—'; c4.style.fontFamily = 'monospace';
+      var c5 = document.createElement('td'); c5.textContent = r.status || '已发送';
+      c5.style.color = (r.status === '成功' || r.status === '已回执') ? '#7ee0a3' : (r.status === '失败' ? '#ff9d6c' : '#e8c87e');
+      var c6 = document.createElement('td');
+      ['发送成功', '发送失败', '已回执'].forEach(function (st) {
+        var b = document.createElement('button');
+        b.className = 'btn btn-ghost';
+        b.style.padding = '2px 8px'; b.style.fontSize = '12px'; b.style.marginRight = '4px';
+        b.textContent = st;
+        b.setAttribute('data-sms-id', r.id);
+        b.setAttribute('data-sms-status', st);
+        if (r.status === st) { b.disabled = true; b.style.opacity = '0.5'; }
+        c6.appendChild(b);
+      });
+      tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c3); tr.appendChild(c4); tr.appendChild(c5); tr.appendChild(c6);
+      tbody.appendChild(tr);
+    });
+  }
+  function smsSetRecordStatus(id, status) {
+    var arr = smsRecords();
+    var hit = false;
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i].id === id) { arr[i].status = status; hit = true; break; }
+    }
+    if (!hit) return;
+    saveSmsRecords(arr);
+    renderSmsRecords();
+  }
+  function smsSend() {
+    var phone = $('smsPhoneInput').value.trim();
+    var tpl = $('smsSendTemplate').value;
+    var tplCode = tpl;
+    if (tpl === 'custom') {
+      tplCode = $('smsSendTemplateCustom').value.trim();
+      if (!/^[0-9]{5,8}$/.test(tplCode)) { alert('请填写有效的阿里云短信模板 Code（5~8 位数字）'); return; }
+    }
+    if (!/^1[3-9]\d{9}$/.test(phone)) { alert('请输入有效的 11 位手机号'); return; }
+    var st = $('smsPageStatus'); if (st) { st.textContent = '正在发送…'; st.className = 'list-status'; }
+    var btn = $('smsSendBtn'); if (btn) btn.disabled = true;
+    function done() { if (btn) btn.disabled = false; }
+    recRequest('/api/sms-verify', { method: 'POST', body: { phoneNumber: phone } }).then(function (data) {
+      var bizId = (data && data.bizId) ? String(data.bizId) : '';
+      var rec = { id: genId(), phone: phone, time: nowStr(), templateCode: tplCode, bizId: bizId, status: bizId ? '已发送' : '待回执' };
+      var arr = smsRecords();
+      arr.unshift(rec);
+      saveSmsRecords(arr);
+      // 成功发送扣减 1 条额度（限流 / 失败不扣减）
+      var quota = smsQuota();
+      if (quota > 0) db.settings.smsQuota = quota - 1;
+      db.settings.smsLastCost = 1;
+      saveDB();
+      renderSmsQuota();
+      renderSmsRecords();
+      if (st) { st.textContent = '发送成功：' + ((data && data.message) ? data.message : '验证码已下发') + (bizId ? '，BizId=' + bizId : ''); st.className = 'list-status'; }
+      done();
+    }).catch(function (err) {
+      var rec = { id: genId(), phone: phone, time: nowStr(), templateCode: tplCode, bizId: '', status: '失败' };
+      var arr = smsRecords();
+      arr.unshift(rec);
+      saveSmsRecords(arr);
+      db.settings.smsLastCost = 0;
+      saveDB();
+      renderSmsQuota();
+      renderSmsRecords();
+      if (st) { st.textContent = '发送失败：' + ((err && err.message) ? err.message : '未知错误'); st.className = 'list-status err'; }
+      done();
+    });
+  }
+
+  // ===== 用户管理 =====
+  function userRoleText(r) {
+    if (r === 'owner') return '主管理员';
+    if (r === 'admin') return '管理员';
+    if (r === 'guest') return '参观';
+    return '用户';
+  }
+  function userSourceText(u) {
+    if (u && u.source) return u.source;
+    return (u && u.role === 'owner') ? '内置' : '注册';
+  }
+  function renderUsersPage() {
+    var tbody = $('usersTbody');
+    if (!tbody) return;
+    var arr = (db.users || []).slice().sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); });
+    tbody.innerHTML = '';
+    var empty = $('usersEmpty'); if (empty) empty.classList.toggle('hidden', arr.length > 0);
+    var cnt = $('usersCount'); if (cnt) cnt.textContent = arr.length;
+    arr.forEach(function (u) {
+      var tr = document.createElement('tr');
+      var c1 = document.createElement('td'); c1.textContent = u.username;
+      var c2 = document.createElement('td'); c2.textContent = userRoleText(u.role);
+      var c3 = document.createElement('td'); c3.textContent = (u.phone && String(u.phone).trim()) ? smsMaskPhone(u.phone) : '未填写';
+      var c4 = document.createElement('td'); c4.textContent = userSourceText(u);
+      var c5 = document.createElement('td'); c5.textContent = u.createdAt || '';
+      var c6 = document.createElement('td');
+      c6.textContent = u.enabled === false ? '已停用' : '正常';
+      c6.style.color = u.enabled === false ? '#ff9d6c' : '#7ee0a3';
+      var c7 = document.createElement('td');
+      if (u.role !== 'owner') {
+        var b1 = document.createElement('button');
+        b1.className = 'btn btn-ghost'; b1.style.padding = '2px 8px'; b1.style.fontSize = '12px';
+        b1.textContent = u.enabled === false ? '启用' : '停用';
+        b1.setAttribute('data-user-id', u.username);
+        b1.setAttribute('data-user-act', 'toggle');
+        c7.appendChild(b1);
+        var b2 = document.createElement('button');
+        b2.className = 'btn btn-danger'; b2.style.padding = '2px 8px'; b2.style.fontSize = '12px'; b2.style.marginLeft = '4px';
+        b2.textContent = '删除';
+        b2.setAttribute('data-user-id', u.username);
+        b2.setAttribute('data-user-act', 'remove');
+        c7.appendChild(b2);
+      } else {
+        c7.textContent = '—';
+      }
+      tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c3); tr.appendChild(c4); tr.appendChild(c5); tr.appendChild(c6); tr.appendChild(c7);
+      tbody.appendChild(tr);
+    });
+  }
+  function createUser() {
+    var st = $('usersStatus');
+    var name = $('cuUsername').value.trim();
+    var pwd = $('cuPassword').value;
+    var phone = $('cuPhone').value.trim();
+    if (!name) { if (st) { st.textContent = '请输入用户名'; st.className = 'list-status err'; } return; }
+    if (pwd.length < 4) { if (st) { st.textContent = '密码至少 4 位'; st.className = 'list-status err'; } return; }
+    if (phone && !/^1[3-9]\d{9}$/.test(phone)) { if (st) { st.textContent = '手机号格式不正确（选填，如填写需为 11 位大陆手机号）'; st.className = 'list-status err'; } return; }
+    if (findUser(name)) { if (st) { st.textContent = '用户名已存在'; st.className = 'list-status err'; } return; }
+    db.users.push({ username: name, password: pwd, role: 'admin', phone: phone, source: '后台创建', createdAt: nowStr(), enabled: true });
+    saveDB();
+    $('cuUsername').value = ''; $('cuPassword').value = ''; $('cuPhone').value = '';
+    renderUsersPage();
+    if (st) { st.textContent = '已创建用户：' + name + '（来源：后台创建' + (phone ? '，手机号已填写' : '，未填手机号') + '）'; st.className = 'list-status'; }
+  }
+  function usersToggleUser(name) {
+    var u = findUser(name);
+    if (!u) return;
+    if (u.role === 'owner') { alert('主管理员账号不能停用'); return; }
+    u.enabled = u.enabled === false ? true : false;
+    saveDB();
+    renderUsersPage();
+  }
+  function removeUser(name) {
+    var u = findUser(name);
+    if (!u) return;
+    if (u.role === 'owner') { alert('主管理员账号不能删除'); return; }
+    if (state.session && state.session.username === u.username) { alert('不能删除当前登录账号'); return; }
+    if (!confirm('确认删除用户「' + name + '」？此操作不可撤销。')) return;
+    db.users = db.users.filter(function (x) { return x.username !== name; });
+    saveDB();
+    renderUsersPage();
+  }
+
+  // ===== 蓝色提示条 =====
+  function showTipIfNeeded() {
+    var bar = $('welcomeTipBar');
+    if (!bar) return;
+    try { if (localStorage.getItem(TIP_HIDE_KEY) === '1') return; } catch (e) {}
+    var txt = $('welcomeTipText');
+    if (txt) txt.textContent = (db.settings && db.settings.tipText) ? db.settings.tipText : '欢迎回来，管理中枢运行中';
+    bar.classList.remove('hidden');
+  }
+  function hideTipBar() {
+    var bar = $('welcomeTipBar');
+    if (bar) bar.classList.add('hidden');
+    try { localStorage.setItem(TIP_HIDE_KEY, '1'); } catch (e) {}
+  }
+  function restoreTipBar() {
+    try { localStorage.removeItem(TIP_HIDE_KEY); } catch (e) {}
+    var bar = $('welcomeTipBar');
+    if (bar) bar.classList.remove('hidden');
+    var txt = $('welcomeTipText');
+    if (txt) txt.textContent = (db.settings && db.settings.tipText) ? db.settings.tipText : '欢迎回来，管理中枢运行中';
+    var msg = $('tipMsg');
+    if (msg) { msg.className = 'form-msg ok'; msg.textContent = '已恢复显示提示条，下次进入后台将自动展示'; }
+  }
+  function saveTipConfig() {
+    var val = $('tipTextInput').value.trim();
+    db.settings.tipText = val || '欢迎回来，管理中枢运行中';
+    saveDB();
+    var msg = $('tipMsg');
+    if (msg) { msg.className = 'form-msg ok'; msg.textContent = '提示文案已保存'; }
+    setTimeout(function () { var m = $('tipMsg'); if (m && m.className.indexOf('ok') >= 0) m.textContent = '文案已保存'; }, 2000);
+  }
+
+  function updateSessionSummary() {
+    var el = $('sessionSummary');
+    if (!el) return;
+    var n = (db.sessions || []).length;
+    el.textContent = '记录所有登录过本后台的设备与会话，当前共 ' + n + ' 条。点击【清空全部】将先自动导出 JSON 备份文件，再清空全部记录。';
+  }
+  function clearSessionsWithBackup() {
+    var list = (db.sessions || []).slice();
+    var n = list.length;
+    if (!n) { alert('当前没有上线设备记录，无需清空。'); return; }
+    if (!confirm('确认清空全部上线设备记录？\n\n将删除 ' + n + ' 条记录；清空前会自动导出一份 JSON 备份文件。\n清空后所有设备需重新登录（含当前设备），此操作不可撤销。')) return;
+    var backup = { exportedAt: nowStr(), type: 'sessions_backup', count: n, sessions: list };
+    var fileName = 'sessions-backup-' + todayStr() + '.json';
+    try {
+      var blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 3000);
+    } catch (err) {
+      alert('备份文件导出失败，已取消清空操作：' + ((err && err.message) ? err.message : '未知错误'));
+      return;
+    }
+    db.sessions = [];
+    saveDB();
+    renderSessionList();
+    updateSessionSummary();
+    alert('已清空上线设备记录，共删除 ' + n + ' 条。\n备份文件：' + fileName + '（已保存到浏览器下载目录）');
+  }
+
+  // ===== 反馈 =====
+  /* ===== v67：反馈联系方式（脱敏展示 + 可联系标注） + 自有后台同步 ===== */
+  var FB_REMOTE_STATE = { loaded: false, loading: false, lastTry: 0, error: '' };
+  var FB_TYPE_MAP = {
+    '功能建议': '功能建议', 'Bug 反馈': 'Bug 反馈', '内容纠错': '内容纠错', '体验优化': '体验优化', '其他': '其他'
+  };
+  /** 手机号脱敏：138****8888（非标准号码则保留首字符 + ****） */
+  function maskPhone(v) {
+    var s = String(v || '').trim();
+    if (!s) return '';
+    var digits = s.replace(/\D/g, '');
+    if (digits.length >= 7) return digits.slice(0, 3) + '****' + digits.slice(-4);
+    if (digits.length >= 2) return digits.charAt(0) + '****' + digits.slice(-1);
+    return '****';
+  }
+  /** 邮箱脱敏：ab***@example.com */
+  function maskEmail(v) {
+    var s = String(v || '').trim();
+    if (!s) return '';
+    var at = s.indexOf('@');
+    if (at <= 0) return '****';
+    var name = s.slice(0, at), domain = s.slice(at);
+    if (name.length <= 2) return name.charAt(0) + '***' + domain;
+    return name.slice(0, 2) + '***' + domain;
+  }
+  function fbHasContact(f) { return !!(f && ((f.phone && String(f.phone).trim()) || (f.email && String(f.email).trim()))); }
+
+  /* ===== v70：邮箱复制（复制完整未脱敏邮箱；页面展示仍脱敏） ===== */
+  /** 完整（未脱敏）邮箱：后台 reveal=1 时接口附带的 emailFull 优先；缺失则回退记录自身的 email（本地留底即完整值） */
+  function fbEmailFull(f) {
+    if (!f) return '';
+    var full = (f.emailFull != null) ? String(f.emailFull).trim() : '';
+    if (full) return full;
+    var raw = (f.email != null) ? String(f.email).trim() : '';
+    if (!raw) return '';
+    if (raw.indexOf('*') >= 0) return ''; // 已是脱敏串，不作为完整邮箱复制
+    return raw;
+  }
+  /** 记录是否填写过邮箱（决定是否渲染复制按钮） */
+  function fbHasEmail(f) {
+    if (!f) return false;
+    var a = (f.email != null) ? String(f.email).trim() : '';
+    var b = (f.emailFull != null) ? String(f.emailFull).trim() : '';
+    return !!(a || b);
+  }
+  /** 复制按钮的「已复制 / 复制失败」反馈：1.6s 后复原为「复制」 */
+  function fbCopyEmailFlash(btn, ok) {
+    if (!btn) return;
+    if (btn._fbFlashTimer) { clearTimeout(btn._fbFlashTimer); btn._fbFlashTimer = null; }
+    btn.textContent = ok ? '已复制' : '复制失败';
+    if (ok) { btn.classList.add('ok'); btn.classList.remove('err'); }
+    else { btn.classList.add('err'); btn.classList.remove('ok'); }
+    btn._fbFlashTimer = setTimeout(function () {
+      btn.textContent = '复制';
+      btn.classList.remove('ok');
+      btn.classList.remove('err');
+      btn._fbFlashTimer = null;
+    }, 1600);
+  }
+  /** 邮箱旁的「复制」按钮：点击复制完整未脱敏邮箱到剪贴板（未填写邮箱时不渲染） */
+  function fbCopyEmailBtn(f) {
+    if (!fbHasEmail(f)) return null;
+    var full = fbEmailFull(f);
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-sm btn-ghost fb-copy-btn';
+    btn.textContent = '复制';
+    btn.title = full ? '复制完整邮箱（不脱敏）' : '完整邮箱暂不可用，请刷新反馈数据后重试';
+    btn.setAttribute('aria-label', '复制完整邮箱到剪贴板');
+    btn.onclick = function (ev) {
+      if (ev && ev.stopPropagation) ev.stopPropagation();
+      if (ev && ev.preventDefault) ev.preventDefault();
+      if (!full) { fbCopyEmailFlash(btn, false); return; }
+      function done() { fbCopyEmailFlash(btn, true); }
+      function fallback() { if (legacyCopyText(full)) { done(); } else { fbCopyEmailFlash(btn, false); } }
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(full).then(done).catch(fallback);
+          return;
+        }
+      } catch (e) { /* 剪贴板 API 不可用 → 走兜底 */ }
+      fallback();
+    };
+    return btn;
+  }
+
+  /* ===== v68：姓名 / 姓氏自动推导 / 按月聚合 ===== */
+  /** 常见复姓（两字），姓氏推导时优先匹配 */
+  var FB_COMPOUND_SURNAMES = ['欧阳', '太史', '端木', '上官', '司马', '东方', '独孤', '南宫', '万俟', '闻人', '夏侯', '诸葛', '尉迟', '公羊', '赫连', '澹台', '皇甫', '宗政', '濮阳', '公冶', '太叔', '申屠', '公孙', '慕容', '仲孙', '钟离', '长孙', '宇文', '司徒', '鲜于', '司空', '闾丘', '子车', '亓官', '司寇', '巫马', '公西', '颛孙', '壤驷', '公良', '漆雕', '乐正', '宰父', '谷梁', '拓跋', '夹谷', '轩辕', '令狐', '段干', '百里', '呼延', '东郭', '南门', '羊舌', '微生', '公户', '公玉', '公仪', '梁丘', '公仲', '公上', '公门', '公山', '公坚', '左丘', '公伯', '西门', '公祖', '第五', '公乘', '贯丘', '公皙', '南荣', '东里', '东宫', '仲长', '子书', '子桑', '即墨', '达奚', '褚师'];
+  function fbHasCJK(s) { return /[\u4e00-\u9fa5]/.test(String(s || '')); }
+  /** 姓氏自动推导：中文取首字（优先匹配常见复姓）；西文姓名取最后一个词；无法推导则留空 */
+  function fbSurname(name) {
+    var s = String(name || '').replace(/\s+/g, ' ').trim();
+    if (!s) return '';
+    if (fbHasCJK(s)) {
+      var head = s.slice(0, 2);
+      if (head.length === 2 && FB_COMPOUND_SURNAMES.indexOf(head) >= 0) return head;
+      return s.charAt(0);
+    }
+    var parts = s.split(' ');
+    return parts.length >= 2 ? parts[parts.length - 1] : '';
+  }
+  /** 月份键：YYYY-MM（兼容 "YYYY-MM-DD HH:mm" 与 ISO 字符串）；无法解析归入「未知月份」 */
+  function fbMonthKey(v) {
+    var m = String(v || '').match(/(\d{4})[-\/](\d{1,2})/);
+    if (!m) return 'unknown';
+    var mm = parseInt(m[2], 10);
+    if (!(mm >= 1 && mm <= 12)) return 'unknown';
+    return m[1] + '-' + (mm < 10 ? '0' : '') + mm;
+  }
+  function fbMonthLabel(k) {
+    var m = String(k || '').match(/^(\d{4})-(\d{2})$/);
+    return m ? (m[1] + '年' + m[2] + '月') : '未知月份';
+  }
+  function fbMonthSortDesc(a, b) {
+    if (a === 'unknown') return 1;
+    if (b === 'unknown') return -1;
+    return String(b).localeCompare(String(a));
+  }
+  /* ===== v69：处理进度流转（待处理 → 处理中 → 已处理），与主站「我的反馈记录」口径一致 ===== */
+  /** 进度状态键：new=待处理 / doing=处理中 / done=已处理（兼容历史数据，未识别值归为 new） */
+  function fbStatusKey(f) {
+    var s = (f && f.status) ? String(f.status) : 'new';
+    if (s === 'doing' || s === 'inprogress' || s === 'progress') return 'doing';
+    if (s === 'done' || s === 'replied' || s === 'closed') return 'done';
+    return 'new';
+  }
+  function fbStatusText(f) {
+    var k = fbStatusKey(f);
+    return k === 'done' ? '已处理' : (k === 'doing' ? '处理中' : '待处理');
+  }
+  function fbStatusClass(f) { return fbStatusKey(f); }
+  /** 明细 CSV 表头（导出明细与月度汇总明细共用，含全部字段） */
+  var FB_CSV_HEAD = ['提交时间', '站点', '姓名', '姓氏', '可联系', '手机号(脱敏)', '邮箱(脱敏)', '反馈类型', '反馈内容', '状态', '处理结果/回复'];
+  function fbCsvRow(f) {
+    var phone = (f.phone || '').trim(), email = (f.email || '').trim();
+    return [f.createdAt || '', getSiteName(f.siteKey), (f.name || '').trim(), fbSurname(f.name),
+      fbHasContact(f) ? '可联系' : '',
+      phone ? maskPhone(phone) : '',
+      email ? maskEmail(email) : '',
+      f.type || '', f.content || '', fbStatusText(f), f.reply || ''];
+  }
+  function fbCsvBuild(rows) {
+    return rows.map(function (r) {
+      return r.map(function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }).join(',');
+    }).join(String.fromCharCode(10));
+  }
+  function fbCsvDownload(rows, fileName) {
+    var csv = fbCsvBuild(rows);
+    var blob = new Blob([String.fromCharCode(0xFEFF) + csv], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  /** 联系方式单元格：填写了手机号/邮箱 → 加「可联系」标注并脱敏展示；未填写 → 整格留空（不显示「无」或占位符） */
+  function fbContactCell(f) {
+    var td = document.createElement('td');
+    var phone = (f && f.phone) ? String(f.phone).trim() : '';
+    var email = (f && f.email) ? String(f.email).trim() : '';
+    if (!phone && !email) {
+      // 兼容 v66 及更早版本写入的通用「联系方式」自由文本
+      var legacy = (f && f.contact) ? String(f.contact).trim() : '';
+      if (legacy) {
+        var lg = document.createElement('div');
+        lg.className = 'fb-contact-line';
+        lg.textContent = legacy;
+        td.appendChild(lg);
+      }
+      return td;
+    }
+    var badge = document.createElement('span');
+    badge.className = 'badge badge-done';
+    badge.textContent = '可联系';
+    td.appendChild(badge);
+    if (phone) {
+      var p = document.createElement('div');
+      p.className = 'fb-contact-line';
+      p.textContent = '手机 ' + maskPhone(phone);
+      td.appendChild(p);
+    }
+    if (email) {
+      var m = document.createElement('div');
+      m.className = 'fb-contact-line';
+      m.textContent = '邮箱 ' + maskEmail(email);
+      var mCopy = fbCopyEmailBtn(f); // v70：复制完整未脱敏邮箱（展示仍脱敏）
+      if (mCopy) m.appendChild(mCopy);
+      td.appendChild(m);
+    }
+    return td;
+  }
+  /** 后台接口返回的反馈记录 → 本地列表结构 */
+  function mapRemoteFeedback(it) {
+    it = it || {};
+    var type = String(it.type || '其他');
+    if (!FB_TYPE_MAP[type]) type = '其他';
+    return {
+      id: String(it.id || ''),
+      siteKey: 'all',
+      type: type,
+      content: String(it.content || ''),
+      reply: String(it.reply || ''),
+      status: (it.status === 'done' || it.status === 'replied') ? 'done' : ((it.status === 'doing' || it.status === 'inprogress') ? 'doing' : 'new'),
+      createdAt: String(it.createdAt || it.created_at || ''),
+      name: String(it.name || ''),
+      phone: String(it.phone || ''),
+      email: String(it.email || ''),
+      // v70：reveal=1 时接口额外返回完整邮箱，供「复制」按钮使用（展示仍走脱敏 email）
+      emailFull: String(it.emailFull || ''),
+      notifyStatus: String(it.notifyStatus || it.notify_status || ''),
+      remote: true
+    };
+  }
+  /** 合并服务端记录（按 id 去重更新，不覆盖本地未同步记录） */
+  function mergeRemoteFeedbacks(items) {
+    if (!items || !items.length) return 0;
+    var added = 0;
+    items.forEach(function (it) {
+      var rec = mapRemoteFeedback(it);
+      if (!rec.id) return;
+      var hit = null;
+      for (var i = 0; i < db.feedbacks.length; i++) {
+        if (db.feedbacks[i] && String(db.feedbacks[i].id) === rec.id) { hit = db.feedbacks[i]; break; }
+      }
+      if (hit) {
+        hit.status = rec.status;
+        if (rec.reply) hit.reply = rec.reply;
+        if (rec.name) hit.name = rec.name;
+        if (rec.phone) hit.phone = rec.phone;
+        if (rec.email) hit.email = rec.email;
+        // v70：保留服务端返回的完整邮箱（仅用于「复制」，不参与脱敏展示）
+        if (rec.emailFull) hit.emailFull = rec.emailFull;
+        if (!hit.createdAt) hit.createdAt = rec.createdAt;
+        hit.notifyStatus = rec.notifyStatus;
+        hit.remote = true;
+      } else {
+        if (!rec.createdAt) rec.createdAt = nowStr();
+        db.feedbacks.push(rec);
+        added++;
+      }
+    });
+    return added;
+  }
+  /** 拉取 /api/feedback（管理员鉴权）并合并到本地列表；失败仅提示，不阻塞本地数据展示 */
+  function loadRemoteFeedbacks() {
+    if (FB_REMOTE_STATE.loading) return;
+    if (FB_REMOTE_STATE.loaded) return;
+    if (Date.now() - FB_REMOTE_STATE.lastTry < 60000) return;
+    FB_REMOTE_STATE.loading = true;
+    FB_REMOTE_STATE.lastTry = Date.now();
+    // v70：reveal=1 → 管理员会话下额外返回 emailFull（完整邮箱），仅用于「复制」按钮
+    recRequest('/api/feedback?limit=200&reveal=1').then(function (data) {
+      var items = recExtractList(data, ['items', 'data', 'list', 'feedbacks']);
+      var added = mergeRemoteFeedbacks(items);
+      FB_REMOTE_STATE.loaded = true;
+      FB_REMOTE_STATE.error = '';
+      FB_REMOTE_STATE.loading = false;
+      saveDB();
+      if (added > 0 || items.length) { loadFeedbacks(); loadStats(); loadLiveFb(); }
+    }).catch(function (err) {
+      FB_REMOTE_STATE.loading = false;
+      FB_REMOTE_STATE.error = (err && err.message) ? err.message : '拉取失败';
+      console.warn('[feedback] 服务端反馈拉取失败：', FB_REMOTE_STATE.error);
+    });
+  }
+  /** 服务端记录标记已处理 / 回复：POST /api/feedback（action=notify，触发结果邮件通知） */
+  function fbRemoteUpdate(f, status, reply) {
+    if (!f || !f.remote || !f.id) return;
+    recRequest('/api/feedback', { method: 'POST', body: { action: 'notify', id: f.id, status: status || 'done', reply: reply || '' } })
+      .then(function (data) {
+        var n = data && data.notify;
+        f.notifyStatus = (n && n.status) ? n.status : (f.notifyStatus || '');
+        saveDB();
+        loadFeedbacks();
+      })
+      .catch(function (err) {
+        alert('服务端同步失败（本地已标记）：' + ((err && err.message) ? err.message : '未知错误'));
+      });
+  }
+  function filteredFeedbacks() {
+    return db.feedbacks.filter(function (f) {
+      if (!f.remote && state.siteId !== 'all' && f.siteKey !== state.siteId) return false;
+      if (state.statusFilter && state.statusFilter !== 'all' && fbStatusKey(f) !== state.statusFilter) return false;
+      if (state.monthFilter && state.monthFilter !== 'all' && fbMonthKey(f.createdAt) !== state.monthFilter) return false;
+      if (state.search) {
+        var q = state.search.toLowerCase();
+        var hay = (f.content + ' ' + f.type + ' ' + (f.name || '') + ' ' + fbSurname(f.name) + ' ' + (f.contact || '') + ' ' + (f.phone || '') + ' ' + (f.email || '') + ' ' + (f.reply || '') + ' ' + fbStatusText(f) + ' ' + getSiteName(f.siteKey)).toLowerCase();
+        if (hay.indexOf(q) < 0) return false;
+      }
+      return true;
+    }).sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); });
+  }
+  /* ===== v69：反馈详情弹窗（处理进度时间线，口径与主站「我的反馈记录」一致） ===== */
+  function fbOpenDetail(f) {
+    var modal = $('fbDetailModal'), body = $('fbDetailBody');
+    if (!modal || !body || !f) return;
+    var k = fbStatusKey(f);
+    var html = [];
+    html.push('<div class="fb-detail-meta">'
+      + '<span>提交时间：' + esc(f.createdAt || '—') + '</span>'
+      + '<span>站点：' + esc(getSiteName(f.siteKey)) + '</span>'
+      + '<span>类型：' + esc(f.type || '—') + '</span>'
+      + '<span>进度：' + esc(fbStatusText(f)) + '</span>'
+      + '<span>数据源：' + (f.remote ? '自营后台' : '本地留底') + '</span>'
+      + '</div>');
+    var meta2 = [];
+    if ((f.name || '').trim()) meta2.push('<span>姓名：' + esc(f.name) + '（姓氏：' + esc(fbSurname(f.name)) + '）</span>');
+    if (fbHasContact(f)) {
+      if ((f.phone || '').trim()) meta2.push('<span>手机号：' + esc(maskPhone(f.phone)) + '</span>');
+      // v70：邮箱旁留出「复制」按钮挂载点（展示仍脱敏）
+      if ((f.email || '').trim()) meta2.push('<span>邮箱：' + esc(maskEmail(f.email)) + '<span id="fbEmailCopySlot"></span></span>');
+    }
+    if (meta2.length) html.push('<div class="fb-detail-meta">' + meta2.join('') + '</div>');
+    html.push('<div class="fb-detail-block"><div class="fb-detail-label">反馈内容</div><div class="fb-detail-content">' + esc(f.content || '（无内容）') + '</div></div>');
+    if ((f.reply || '').trim()) {
+      html.push('<div class="fb-detail-block fb-detail-reply"><div class="fb-detail-label">站长回复</div><div class="fb-detail-content">' + esc(f.reply) + '</div></div>');
+    }
+    var tl = [];
+    tl.push('<div class="fb-tl-item new"><span class="fb-tl-dot"></span><div class="fb-tl-title">已提交<span class="fb-tl-time">' + esc(f.createdAt || '') + '</span></div><div class="fb-tl-note">反馈已提交至站内自营后台，等待处理</div></div>');
+    if (k === 'doing' || k === 'done') {
+      tl.push('<div class="fb-tl-item doing"><span class="fb-tl-dot"></span><div class="fb-tl-title">处理中<span class="fb-tl-time">' + esc(f.doingAt || '') + '</span></div><div class="fb-tl-note">站长已开始跟进这条反馈</div></div>');
+    }
+    if (k === 'done') {
+      tl.push('<div class="fb-tl-item done"><span class="fb-tl-dot"></span><div class="fb-tl-title">已处理<span class="fb-tl-time">' + esc(f.doneAt || '') + '</span></div><div class="fb-tl-note">' + ((f.reply || '').trim() ? '站长已给出回复，可在主站「我的反馈记录」查看' : '已处理完成（本次未填写回复）') + '</div></div>');
+    }
+    html.push('<div class="fb-detail-block"><div class="fb-detail-label">处理进度</div><div class="fb-timeline">' + tl.join('') + '</div></div>');
+    body.innerHTML = html.join('');
+    // v70：把「复制完整邮箱」按钮挂到详情弹窗的邮箱旁
+    var emailSlot = $('fbEmailCopySlot');
+    if (emailSlot) {
+      var emailCopy = fbCopyEmailBtn(f);
+      if (emailCopy) emailSlot.appendChild(emailCopy);
+    }
+    modal.classList.remove('hidden');
+  }
+  function fbCloseDetail() {
+    var modal = $('fbDetailModal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  /* ===== v69：反馈管理视图（明细表格 / 月度汇总）与月份筛选 ===== */
+  /** 按当前数据刷新「月份」下拉选项（保留已选月份；无数据的月份自动移除） */
+  function fbRefreshMonthSelect() {
+    var sel = $('fbMonthSelect');
+    if (!sel) return;
+    var seen = {}, months = [];
+    (db.feedbacks || []).forEach(function (f) {
+      var k = fbMonthKey(f.createdAt);
+      if (!seen[k]) { seen[k] = 1; months.push(k); }
+    });
+    months.sort(fbMonthSortDesc);
+    var cur = (state.monthFilter && seen[state.monthFilter]) ? state.monthFilter : 'all';
+    state.monthFilter = cur;
+    var html = '<option value="all">全部月份</option>';
+    months.forEach(function (k) {
+      html += '<option value="' + k + '">' + fbMonthLabel(k) + '</option>';
+    });
+    sel.innerHTML = html;
+    sel.value = cur;
+  }
+  /** 切换「明细表格 / 月度汇总」视图（口径与明细一致：同源 db.feedbacks + 当前筛选条件） */
+  function fbApplyView() {
+    var view = (state.fbView === 'monthly') ? 'monthly' : 'detail';
+    var d = $('fbDetailBlock'), m = $('fbMonthlyBlock');
+    if (d) d.classList.toggle('hidden', view !== 'detail');
+    if (m) m.classList.toggle('hidden', view !== 'monthly');
+    var chips = document.querySelectorAll('#fbViewChips .chip');
+    for (var i = 0; i < chips.length; i++) {
+      chips[i].classList.toggle('active', (chips[i].getAttribute('data-view') || 'detail') === view);
+    }
+    if (view === 'monthly') renderFbMonthly();
+  }
+  /** 月度汇总：按自然月聚合（反馈总数 / 待处理 / 已处理 / 已回复 / 可联系 / 类型分布） */
+  function fbMonthlyRows() {
+    var map = {};
+    filteredFeedbacks().forEach(function (f) {
+      var k = fbMonthKey(f.createdAt);
+      if (!map[k]) map[k] = { month: k, total: 0, pending: 0, done: 0, replied: 0, contact: 0, types: {}, list: [] };
+      var g = map[k];
+      g.total++;
+      g.list.push(f);
+      var sk = fbStatusKey(f);
+      if (sk === 'done') g.done++; else g.pending++;
+      if ((f.reply || '').trim()) g.replied++;
+      if (fbHasContact(f)) g.contact++;
+      var ty = f.type || '其他';
+      g.types[ty] = (g.types[ty] || 0) + 1;
+    });
+    var rows = [];
+    for (var k in map) rows.push(map[k]);
+    rows.sort(function (a, b) { return fbMonthSortDesc(a.month, b.month); });
+    return rows;
+  }
+  function fbTypeBrief(types) {
+    var arr = [];
+    for (var t in types) arr.push({ t: t, n: types[t] });
+    arr.sort(function (a, b) { return b.n - a.n || String(a.t).localeCompare(String(b.t)); });
+    return arr.map(function (x) { return x.t + ' ' + x.n; }).join(' / ') || '—';
+  }
+  function renderFbMonthly() {
+    var tbody = $('fbMonthlyTbody'), empty = $('fbMonthlyEmpty'), sum = $('fbMonthlySummary');
+    if (!tbody) return;
+    var rows = fbMonthlyRows();
+    tbody.innerHTML = '';
+    if (sum) {
+      var tot = 0, pend = 0, done = 0;
+      rows.forEach(function (g) { tot += g.total; pend += g.pending; done += g.done; });
+      sum.textContent = '共 ' + rows.length + ' 个月 · 反馈 ' + tot + ' 条（待处理 ' + pend + ' / 已处理 ' + done + '）';
+    }
+    if (!rows.length) { if (empty) empty.classList.remove('hidden'); return; }
+    if (empty) empty.classList.add('hidden');
+    rows.forEach(function (g) {
+      var tr = document.createElement('tr');
+      function cell(text) { var td = document.createElement('td'); td.textContent = text; return td; }
+      tr.appendChild(cell(fbMonthLabel(g.month)));
+      tr.appendChild(cell(String(g.total)));
+      tr.appendChild(cell(String(g.pending)));
+      tr.appendChild(cell(String(g.done)));
+      tr.appendChild(cell(String(g.replied)));
+      tr.appendChild(cell(String(g.contact)));
+      tr.appendChild(cell(fbTypeBrief(g.types)));
+      var o = document.createElement('td');
+      var btn = document.createElement('button');
+      btn.className = 'btn btn-sm btn-ghost'; btn.textContent = '导出本月明细';
+      btn.onclick = function () {
+        var rowsCsv = [FB_CSV_HEAD];
+        g.list.forEach(function (f) { rowsCsv.push(fbCsvRow(f)); });
+        fbCsvDownload(rowsCsv, 'feedbacks_' + g.month + '.csv');
+      };
+      o.appendChild(btn);
+      tr.appendChild(o);
+      tbody.appendChild(tr);
+    });
+  }
+  function exportMonthlyCsv() {
+    var rows = fbMonthlyRows();
+    if (!rows.length) { alert('没有可导出的数据'); return; }
+    var out = [['月份', '反馈总数', '待处理', '处理中', '已处理', '已回复', '可联系', '类型分布']];
+    rows.forEach(function (g) {
+      var doing = 0;
+      g.list.forEach(function (f) { if (fbStatusKey(f) === 'doing') doing++; });
+      out.push([fbMonthLabel(g.month), g.total, g.pending - doing, doing, g.done, g.replied, g.contact, fbTypeBrief(g.types)]);
+    });
+    fbCsvDownload(out, 'feedbacks_monthly_' + todayStr() + '.csv');
+  }
+  function loadFeedbacks() {
+    var list = filteredFeedbacks();
+    var tbody = $('feedbackTbody');
+    tbody.innerHTML = '';
+    loadRemoteFeedbacks();
+    fbRefreshMonthSelect();
+    fbApplyView();
+    if (!list.length) { $('feedbackEmpty').classList.remove('hidden'); return; }
+    $('feedbackEmpty').classList.add('hidden');
+    list.forEach(function (f) {
+      var tr = document.createElement('tr');
+      var t = document.createElement('td'); t.textContent = f.createdAt;
+      // 姓名：未填则整格留空；有联系方式时追加「可联系」标注
+      var nm = document.createElement('td');
+      var nmText = (f.name || '').trim();
+      if (nmText) nm.appendChild(document.createTextNode(nmText));
+      if (fbHasContact(f)) {
+        var cbadge = document.createElement('span');
+        cbadge.className = 'badge badge-done';
+        cbadge.textContent = '可联系';
+        if (nmText) cbadge.style.marginLeft = '6px';
+        nm.appendChild(cbadge);
+      }
+      // 姓氏：由姓名自动推导（中文取首字，兼容常见复姓）；未填姓名则留空
+      var sn = document.createElement('td');
+      sn.textContent = fbSurname(f.name);
+      // 手机号 / 邮箱：填写则脱敏展示，未填写整格留空
+      var ph = document.createElement('td');
+      ph.textContent = (f.phone && String(f.phone).trim()) ? maskPhone(f.phone) : '';
+      var em = document.createElement('td');
+      em.textContent = (f.email && String(f.email).trim()) ? maskEmail(f.email) : '';
+      // v70：邮箱旁加「复制」按钮（复制完整未脱敏邮箱；无邮箱则不加）
+      var emCopy = fbCopyEmailBtn(f);
+      if (emCopy) em.appendChild(emCopy);
+      var ty = document.createElement('td');
+      var span = document.createElement('span');
+      span.className = 'type-tag'; span.textContent = f.type;
+      ty.appendChild(span);
+      var c = document.createElement('td');
+      c.textContent = (f.siteKey && f.siteKey !== 'all') ? ('[' + getSiteName(f.siteKey) + '] ' + f.content) : f.content;
+      c.style.maxWidth = '280px';
+      var st = document.createElement('td');
+      var stb = document.createElement('span');
+      stb.className = 'status-tag ' + fbStatusClass(f);
+      stb.textContent = fbStatusText(f);
+      st.appendChild(stb);
+      var o = document.createElement('td');
+      var ops = document.createElement('div'); ops.className = 'ops';
+      var dView = document.createElement('button');
+      dView.className = 'btn btn-sm btn-ghost'; dView.textContent = '详情';
+      dView.onclick = function () { fbOpenDetail(f); };
+      ops.appendChild(dView);
+      if (isAdmin()) {
+        var skey = fbStatusKey(f);
+        if (skey === 'new') {
+          var d1 = document.createElement('button');
+          d1.className = 'btn btn-sm btn-primary'; d1.textContent = '开始处理';
+          d1.onclick = function () {
+            f.status = 'doing'; f.doingAt = nowStr(); saveDB(); loadFeedbacks(); loadStats();
+            fbRemoteUpdate(f, 'doing', f.reply || '');   // 同步进度到自营后台（处理中不发信）
+          };
+          ops.appendChild(d1);
+        }
+        if (skey !== 'done') {
+          var d2 = document.createElement('button');
+          d2.className = 'btn btn-sm btn-ghost'; d2.textContent = '回复并结单';
+          d2.onclick = function () {
+            var r = prompt('回复内容（保存后在主站「我的反馈记录」对访客可见）：', f.reply || '');
+            if (r !== null) {
+              f.reply = r; f.status = 'done'; f.doneAt = nowStr(); saveDB(); loadFeedbacks(); loadStats();
+              fbRemoteUpdate(f, 'done', r);
+            }
+          };
+          ops.appendChild(d2);
+        }
+        if (skey === 'done') {
+          var d4 = document.createElement('button');
+          d4.className = 'btn btn-sm btn-ghost'; d4.textContent = '重新打开';
+          d4.onclick = function () {
+            f.status = 'doing'; saveDB(); loadFeedbacks(); loadStats();
+            fbRemoteUpdate(f, 'doing', f.reply || '');
+          };
+          ops.appendChild(d4);
+        }
+      }
+      if (isOwner() && !f.remote) {
+        var d3 = document.createElement('button');
+        d3.className = 'btn btn-sm btn-danger'; d3.textContent = '删除';
+        d3.onclick = function () {
+          if (confirm('确认删除这条反馈？可到回收站恢复。')) {
+            db.trash.push({ id: f.id, siteKey: f.siteKey, type: f.type, content: f.content, contact: f.contact, phone: f.phone || '', email: f.email || '', reply: f.reply || '', createdAt: f.createdAt, deletedAt: nowStr() });
+            db.feedbacks = db.feedbacks.filter(function (x) { return x.id !== f.id; });
+            saveDB(); loadFeedbacks(); loadStats();
+          }
+        };
+        ops.appendChild(d3);
+      }
+      o.appendChild(ops);
+      var r = document.createElement('td');
+      r.textContent = f.reply || '';
+      r.style.maxWidth = '220px';
+      r.style.color = f.reply ? '#7fe3c8' : 'rgba(190,220,255,.35)';
+      tr.appendChild(t); tr.appendChild(nm); tr.appendChild(sn); tr.appendChild(ph); tr.appendChild(em);
+      tr.appendChild(ty); tr.appendChild(c); tr.appendChild(st); tr.appendChild(r); tr.appendChild(o);
+      tbody.appendChild(tr);
+    });
+  }
+  function exportCsv() {
+    var list = filteredFeedbacks();
+    if (!list.length) { alert('没有可导出的数据'); return; }
+    var rows = [FB_CSV_HEAD];
+    list.forEach(function (f) { rows.push(fbCsvRow(f)); });
+    fbCsvDownload(rows, 'feedbacks_' + todayStr() + '.csv');
+  }
+
+  // ===== 统计 =====
+  function loadStats() {
+    var list = db.feedbacks;
+    var today = todayStr();
+    var todayCount = list.filter(function (f) { return f.createdAt.indexOf(today) === 0; }).length;
+    var pend = list.filter(function (f) { return f.status === 'new'; }).length;
+    var totalViews = 0;
+    for (var k in db.analytics.views) totalViews += db.analytics.views[k];
+    $('statToday').textContent = todayCount;
+    $('statTotal').textContent = list.length;
+    $('statPending').textContent = pend;
+    $('statBrowse').textContent = totalViews;
+    var dist = {};
+    list.forEach(function (f) { dist[f.type] = (dist[f.type] || 0) + 1; });
+    var keys = Object.keys(dist);
+    var chart = $('typeChart');
+    chart.innerHTML = '';
+    if (!keys.length) { chart.textContent = '暂无数据'; chart.style.color = 'rgba(190,220,255,.4)'; return; }
+    var max = 1;
+    keys.forEach(function (k) { if (dist[k] > max) max = dist[k]; });
+    keys.forEach(function (k) {
+      var row = document.createElement('div');
+      row.className = 'chart-row';
+      var lb = document.createElement('span'); lb.className = 'chart-label'; lb.textContent = k;
+      var barW = document.createElement('div'); barW.className = 'chart-bar-wrap';
+      var bar = document.createElement('div'); bar.className = 'chart-bar';
+      bar.style.width = (dist[k] / max * 100) + '%';
+      bar.textContent = dist[k];
+      barW.appendChild(bar);
+      row.appendChild(lb); row.appendChild(barW);
+      chart.appendChild(row);
+    });
+  }
+
+  // ===== AI 总结 =====
+  function callGLMSummary(promptText) {
+    var cfg = db.settings;
+    return fetch(cfg.aiEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.aiApiKey },
+      body: JSON.stringify({
+        model: cfg.aiModel,
+        messages: [{ role: 'user', content: promptText }],
+        temperature: 0.7
+      })
+    }).then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }).then(function (data) {
+      return data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : '';
+    });
+  }
+  function buildSummaryPrompt() {
+    var list = db.feedbacks;
+    var lines = [];
+    var today = todayStr();
+    var todayCount = list.filter(function (f) { return f.createdAt.indexOf(today) === 0; }).length;
+    var pend = list.filter(function (f) { return f.status === 'new'; }).length;
+    lines.push('总反馈数：' + list.length);
+    lines.push('今日反馈：' + todayCount);
+    lines.push('待处理：' + pend);
+    var recent = list.slice(-8).reverse();
+    if (recent.length) {
+      lines.push('最近反馈：');
+      recent.forEach(function (f) {
+        lines.push('- ' + f.createdAt + ' | ' + getSiteName(f.siteKey) + ' | ' + f.type + ' | ' + f.content.slice(0, 60) + ' | 状态:' + (f.status === 'new' ? '待处理' : '已处理'));
+      });
+    } else {
+      lines.push('暂无反馈记录');
+    }
+    // 机型推荐与运营选题数据（让日报有内容可写）
+    var recAll = (typeof REC_STATE !== 'undefined' && REC_STATE.items) ? REC_STATE.items : [];
+    if (recAll.length) {
+      var pendRec = 0, apprRec = 0, rejRec = 0;
+      recAll.forEach(function (x) {
+        var st = x.status || 'pending';
+        if (st === 'approved') apprRec++;
+        else if (st === 'rejected') rejRec++;
+        else pendRec++;
+      });
+      lines.push('用户推荐机型：共 ' + recAll.length + ' 条（待审核 ' + pendRec + ' / 已采纳 ' + apprRec + ' / 已驳回 ' + rejRec + '）');
+      var recentRec = recAll.slice(0, 5);
+      if (recentRec.length) {
+        lines.push('最近提交机型：' + recentRec.map(function (x) { return (x.nameZh || '') + (x.code ? '（' + x.code + '）' : ''); }).join('、'));
+      }
+    }
+    if (typeof NEWS_STATE !== 'undefined' && NEWS_STATE.items && NEWS_STATE.items.length) {
+      lines.push('航空快讯：当前抓取 ' + NEWS_STATE.items.length + ' 条，最近标题：' + NEWS_STATE.items.slice(0, 5).map(function (x) { return x.title || ''; }).join(' / '));
+    }
+    if (typeof OPS_STATE !== 'undefined' && OPS_STATE.data) {
+      var od = OPS_STATE.data;
+      var ost = od.stats || {};
+      lines.push('主站「自然语言找飞机」：近 ' + (od.days || 30) + ' 天检索 ' + (ost.searchTotal || 0) + ' 次，未命中 ' + (ost.searchMiss || 0) + ' 次（' + (ost.searchMissRate || 0) + '%）');
+      if (od.missingAircraft && od.missingAircraft.length) {
+        lines.push('用户想找但库里没有的机型 Top：' + od.missingAircraft.slice(0, 8).map(function (x) { return (x.term || '') + '(' + (x.count || 0) + '次)'; }).join('、'));
+      }
+      lines.push('主站「问 AI」：提问 ' + (ost.qaTotal || 0) + ' 次，答不上来 ' + (ost.qaMiss || 0) + ' 次（' + (ost.qaMissRate || 0) + '%）');
+      if (od.unansweredQuestions && od.unansweredQuestions.length) {
+        lines.push('AI 答不上来的问题 Top：' + od.unansweredQuestions.slice(0, 8).map(function (x) { return (x.question || '') + '(' + (x.count || 0) + '次)'; }).join('、'));
+      }
+    }
+    lines.push('请用中文写一份「民航客机收藏馆」的当日运营日报，要求：');
+    lines.push('1) 篇幅不少于 400 字，分四个小标题：整体概况 / 重点问题 / 机型与内容动向 / 建议行动；');
+    lines.push('2) 用上述具体数字支撑判断，不要空话套话，不要罗列原始数据行；');
+    lines.push('3) 「建议行动」给出 3 条可执行动作，优先针对未命中检索与答不上来的问题；');
+    lines.push('4) 若某项数据缺失，明确指出还需要补充哪些数据；');
+    lines.push('5) 语气专业克制，不要寒暄、不要称呼读者、不要 Markdown 符号堆砌。');
+    return lines.join(String.fromCharCode(10));
+  }
+  function aiSummary() {
+    var btn = $('aiSummaryBtn');
+    btn.disabled = true; btn.textContent = '总结中…';
+    openAiResult('AI 总结');
+    $('aiResultBody').textContent = '正在生成 AI 总结，请稍候…';
+    callGLMSummary(buildSummaryPrompt()).then(function (txt) {
+      $('aiResultBody').textContent = txt || '（AI 未返回内容）';
+    }).catch(function () {
+      $('aiResultBody').textContent = 'AI 总结调用失败，请检查系统设置中的 API 配置后重试。';
+    }).finally(function () {
+      btn.disabled = false; btn.innerHTML = '生成 AI 总结<span class="ai-badge">AI</span>';
+    });
+  }
+
+  // ===== 7 日反馈趋势 =====
+  function renderTrend() {
+    var wrap = $('trendChart');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    var now = new Date();
+    var dayNames = ['日', '一', '二', '三', '四', '五', '六'];
+    var days = [];
+    for (var i = 6; i >= 0; i--) {
+      var d = new Date(now.getTime() - i * 86400000);
+      days.push(d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate());
+    }
+    var counts = [], max = 0;
+    days.forEach(function (ds) {
+      var c = db.feedbacks.filter(function (f) { return f.createdAt.indexOf(ds) === 0; }).length;
+      counts.push(c);
+      if (c > max) max = c;
+    });
+    days.forEach(function (ds, idx) {
+      var d = new Date(days[idx].replace(/-/g, '/'));
+      var col = document.createElement('div'); col.className = 'trend-col';
+      var num = document.createElement('div'); num.className = 'trend-num'; num.textContent = counts[idx];
+      var bw = document.createElement('div'); bw.className = 'trend-bar-wrap';
+      var bar = document.createElement('div');
+      bar.className = 'trend-bar' + (counts[idx] === 0 ? ' zero' : '');
+      bar.style.height = (max === 0 ? 8 : Math.max(8, Math.round(counts[idx] / max * 100))) + '%';
+      bw.appendChild(bar);
+      var day = document.createElement('div'); day.className = 'trend-day';
+      day.textContent = '周' + dayNames[d.getDay()] + ' ' + (d.getMonth() + 1) + '/' + d.getDate();
+      col.appendChild(num); col.appendChild(bw); col.appendChild(day);
+      wrap.appendChild(col);
+    });
+  }
+
+  // ===== 快捷便签 =====
+  function renderNotes() {
+    var wrap = $('noteList');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    if (!db.notes.length) {
+      var p = document.createElement('p'); p.className = 'note-empty'; p.textContent = '暂无便签，记一条运营待办吧';
+      wrap.appendChild(p); return;
+    }
+    db.notes.slice().sort(function (a, b) { return (a.done ? 1 : 0) - (b.done ? 1 : 0) || b.createdAt.localeCompare(a.createdAt); }).forEach(function (n) {
+      var item = document.createElement('div');
+      item.className = 'note-item' + (n.done ? ' done' : '');
+      var check = document.createElement('span'); check.className = 'note-check'; check.textContent = '✓';
+      check.title = '标记完成 / 取消';
+      check.onclick = function () { n.done = !n.done; saveDB(); renderNotes(); };
+      var text = document.createElement('span'); text.className = 'note-text'; text.textContent = n.text;
+      var del = document.createElement('button'); del.className = 'note-del'; del.title = '删除便签'; del.textContent = '✕';
+      del.onclick = function () { db.notes = db.notes.filter(function (x) { return x.id !== n.id; }); saveDB(); renderNotes(); };
+      item.appendChild(check); item.appendChild(text); item.appendChild(del);
+      wrap.appendChild(item);
+    });
+  }
+  function addNote() {
+    var input = $('noteInput');
+    var v = input.value.trim();
+    if (!v) return;
+    db.notes.push({ id: genId(), text: v, done: false, createdAt: nowStr() });
+    saveDB();
+    input.value = '';
+    renderNotes();
+  }
+
+  // ===== 最新反馈 =====
+  function renderRecent() {
+    var wrap = $('recentList');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    var list = db.feedbacks.slice().sort(function (a, b) { return b.createdAt.localeCompare(a.createdAt); }).slice(0, 5);
+    if (!list.length) {
+      var p = document.createElement('p'); p.className = 'recent-empty'; p.textContent = '暂无反馈';
+      wrap.appendChild(p); return;
+    }
+    list.forEach(function (f) {
+      var item = document.createElement('div'); item.className = 'recent-item';
+      var badge = document.createElement('span'); badge.className = 'recent-badge'; badge.textContent = f.type;
+      var text = document.createElement('span'); text.className = 'recent-text';
+      text.textContent = (f.siteKey && f.siteKey !== 'all' ? '[' + getSiteName(f.siteKey) + '] ' : '') + f.content;
+      var st = document.createElement('span'); st.className = 'recent-status ' + f.status; st.textContent = f.status === 'new' ? '待处理' : '已处理';
+      var tm = document.createElement('span'); tm.className = 'recent-time'; tm.textContent = f.createdAt;
+      item.appendChild(badge); item.appendChild(text); item.appendChild(st); item.appendChild(tm);
+      wrap.appendChild(item);
+    });
+  }
+
+  // ===== 公告管理（后端接口 /api/announcements，KV 存储） =====
+  var ANN_STATE = { items: [], filter: 'active', scope: 'public', loading: false, error: '', lastSync: '' };
+
+  function annExtractList(data) {
+    if (Array.isArray(data)) return data;
+    if (data && typeof data === 'object') {
+      var keys = ['announcements', 'items', 'data', 'list'];
+      for (var i = 0; i < keys.length; i++) {
+        if (Array.isArray(data[keys[i]])) return data[keys[i]];
+      }
+    }
+    return [];
+  }
+  function annScopeText(scope) {
+    return (scope === 'internal') ? '对内' : '对外';
+  }
+  /** 拉取公告列表：后台走 scope=admin（需 X-Admin-Token，经 recRequest 统一带头） */
+  function loadAnnouncements(force) {
+    if (ANN_STATE.loading) return Promise.resolve(false);
+    if (isGuest()) return Promise.resolve(false);
+    ANN_STATE.loading = true;
+    var status = $('annStatus');
+    if (status && (force || !ANN_STATE.items.length)) {
+      status.className = 'list-status';
+      status.innerHTML = '<span class="hint-note">正在从后端拉取公告列表…</span>';
+    }
+    return recRequest('/api/announcements?scope=admin&status=all').then(function (data) {
+      ANN_STATE.items = annExtractList(data);
+      ANN_STATE.error = '';
+      ANN_STATE.lastSync = nowStr();
+      renderNotices();
+      return true;
+    }).catch(function (err) {
+      ANN_STATE.error = (err && err.message) ? err.message : '未知错误';
+      renderNotices();
+      return false;
+    }).finally(function () { ANN_STATE.loading = false; });
+  }
+  function renderNotices() {
+    var wrap = $('noticeList');
+    if (!wrap) return;
+    var status = $('annStatus');
+    var all = ANN_STATE.items || [];
+    var list = all.filter(function (n) {
+      if (ANN_STATE.filter === 'active') return !n.revoked;
+      if (ANN_STATE.filter === 'revoked') return !!n.revoked;
+      return true;
+    });
+    var chips = document.querySelectorAll('#annChips .chip');
+    var counts = { active: 0, revoked: 0, all: all.length };
+    for (var c = 0; c < all.length; c++) { if (all[c].revoked) counts.revoked++; else counts.active++; }
+    var labels = { active: '已发布', revoked: '已撤回', all: '全部' };
+    for (var i = 0; i < chips.length; i++) {
+      var key = chips[i].getAttribute('data-ann');
+      chips[i].textContent = (labels[key] || key) + '（' + (counts[key] || 0) + '）';
+      chips[i].classList.toggle('active', key === ANN_STATE.filter);
+    }
+    wrap.innerHTML = '';
+    if (status) {
+      if (ANN_STATE.error) {
+        status.className = 'list-status';
+        status.innerHTML = '<span class="list-err">公告接口暂不可用：' + esc(ANN_STATE.error)
+          + '<br>请确认「系统设置 → 推荐机型接口配置」中的后端地址与管理令牌后点击「刷新列表」重试。</span>';
+      } else {
+        status.className = 'list-status';
+        status.innerHTML = '<span class="hint-note">共 ' + all.length + ' 条公告（对外 ' + all.filter(function (n) { return n.scope === 'public' && !n.revoked; }).length
+          + ' · 对内 ' + all.filter(function (n) { return n.scope === 'internal' && !n.revoked; }).length
+          + '）· 上次同步 ' + esc(ANN_STATE.lastSync || '—') + '</span>';
+      }
+    }
+    if (!list.length) { $('noticeEmpty').classList.remove('hidden'); return; }
+    $('noticeEmpty').classList.add('hidden');
+    list.slice().sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); }).forEach(function (n) {
+      var card = document.createElement('div'); card.className = 'notice-card';
+      var head = document.createElement('div'); head.className = 'notice-head';
+      var title = document.createElement('span'); title.className = 'notice-title'; title.textContent = n.title;
+      var tag = document.createElement('span'); tag.className = 'notice-tag';
+      tag.textContent = annScopeText(n.scope) + (n.revoked ? ' · 已撤回' : '');
+      var tm = document.createElement('span'); tm.className = 'notice-time';
+      tm.textContent = (n.createdAt ? recFmtTime(n.createdAt) : '—') + (n.createdBy ? (' · ' + n.createdBy) : '');
+      head.appendChild(title); head.appendChild(tag); head.appendChild(tm);
+      var content = document.createElement('div'); content.className = 'notice-content'; content.textContent = n.content;
+      card.appendChild(head); card.appendChild(content);
+      if (isAdmin() && !n.revoked) {
+        var acts = document.createElement('div'); acts.className = 'notice-actions';
+        var rev = document.createElement('button'); rev.className = 'btn btn-sm btn-danger'; rev.textContent = '撤回';
+        rev.onclick = function () {
+          if (confirm('确认撤回公告「' + n.title + '」？\n\n撤回后主站弹窗与常驻板块将自动消失（对外公告），对内公告将从发布列表移除。')) {
+            revokeAnnouncement(n.id, n.scope);
+          }
+        };
+        acts.appendChild(rev);
+        card.appendChild(acts);
+      }
+      wrap.appendChild(card);
+    });
+  }
+  function openNoticeModal() {
+    $('noticeTitle').value = ''; $('noticeContent').value = '';
+    ANN_STATE.scope = 'public';
+    var chips = document.querySelectorAll('#noticeScopeChips .chip');
+    for (var i = 0; i < chips.length; i++) {
+      chips[i].classList.toggle('active', chips[i].getAttribute('data-scope') === 'public');
+    }
+    $('noticeModal').classList.remove('hidden');
+    $('noticeTitle').focus();
+  }
+  /** 发布公告：POST /api/announcements（X-Admin-Token 由 recRequest 统一附加） */
+  function addNotice(e) {
+    e.preventDefault();
+    var title = $('noticeTitle').value.trim();
+    var content = $('noticeContent').value.trim();
+    var scope = ANN_STATE.scope === 'internal' ? 'internal' : 'public';
+    if (!title || !content) { alert('公告标题和内容都不能为空'); return; }
+    if (scope === 'public') {
+      if (!confirm('确认发布【对外公告】？\n\n标题：' + title + '\n发布后所有访问主站的用户都会在弹窗与常驻板块中看到该公告，撤回前持续展示。')) return;
+    }
+    var btn = $('noticeSubmitBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '发布中…'; }
+    recRequest('/api/announcements', { method: 'POST', body: { title: title, content: content, scope: scope, by: (state.session && state.session.username) || '' } }).then(function () {
+      $('noticeModal').classList.add('hidden');
+      ANN_STATE.filter = 'active';
+      return loadAnnouncements(true).then(function () {
+        alert(scope === 'public' ? '对外公告已发布，主站将自动展示。' : '对内公告已发布，仅管理员可见。');
+      });
+    }).catch(function (err) {
+      alert('发布失败：' + ((err && err.message) ? err.message : '未知错误'));
+    }).finally(function () {
+      if (btn) { btn.disabled = false; btn.textContent = '发布'; }
+    });
+  }
+  /** 撤回公告：POST /api/announcements { action:'revoke', id } */
+  function revokeAnnouncement(id, scope) {
+    recRequest('/api/announcements', { method: 'POST', body: { action: 'revoke', id: id } }).then(function () {
+      return loadAnnouncements(true).then(function () {
+        alert('公告已撤回' + (scope === 'internal' ? '。' : '，主站弹窗与板块将自动消失。'));
+      });
+    }).catch(function (err) {
+      alert('撤回失败：' + ((err && err.message) ? err.message : '未知错误'));
+    });
+  }
+  // ===== 敏感面板身份验证（登录密码） =====
+  var GATE_KEY = 'aa_gate_ok_v1';
+  var SENSITIVE_PAGES = ['notices', 'trash', 'sites', 'settings'];
+  var gateState = { pending: null, ok: false };
+  function gateSessionKey() {
+    return GATE_KEY + ':' + ((state.session && state.session.sessionId) || 'anon');
+  }
+  function gatePassed() {
+    if (gateState.ok) return true;
+    try { return sessionStorage.getItem(gateSessionKey()) === '1'; } catch (e) { return false; }
+  }
+  function clearGate() {
+    gateState.ok = false;
+    gateState.pending = null;
+    try { sessionStorage.removeItem(gateSessionKey()); } catch (e) {}
+  }
+  /** 敏感面板放行检查：未验证则弹「登录密码」验证框，验证通过后继续进入目标页面 */
+  function requireGate(name) {
+    if (SENSITIVE_PAGES.indexOf(name) < 0) return true;
+    if (gatePassed()) return true;
+    gateState.pending = name;
+    var errEl = $('gateErr');
+    if (errEl) errEl.textContent = '';
+    var t = $('gateTitle'); if (t) t.textContent = '身份验证 · ' + (GATE_PAGE_TITLES[name] || name);
+    var pwd = $('gatePwd'); if (pwd) pwd.value = '';
+    var gm = $('gateModal'); if (gm) gm.classList.remove('hidden');
+    setTimeout(function () { var p = $('gatePwd'); if (p) p.focus(); }, 30);
+    return false;
+  }
+  var GATE_PAGE_TITLES = { dashboard: '数据看板', feedbacks: '反馈管理', recommendations: '推荐机型', notices: '公告管理', trash: '回收站', sites: '站点管理', settings: '系统设置' };
+  function closeGate() {
+    gateState.pending = null;
+    var gm = $('gateModal'); if (gm) gm.classList.add('hidden');
+  }
+  /** 校验当前登录账号的「登录密码」 */
+  function verifyGate(e) {
+    e.preventDefault();
+    var errEl = $('gateErr');
+    var pwd = $('gatePwd') ? $('gatePwd').value : '';
+    var u = findUser(state.session ? state.session.username : '');
+    if (!u) { if (errEl) errEl.textContent = '未找到当前登录账号，请重新登录'; return; }
+    if (!pwd) { if (errEl) errEl.textContent = '请输入登录密码'; return; }
+    if (pwd !== u.password) { if (errEl) errEl.textContent = '密码错误，请重新输入'; return; }
+    gateState.ok = true;
+    try { sessionStorage.setItem(gateSessionKey(), '1'); } catch (e2) {}
+    var next = gateState.pending;
+    gateState.pending = null;
+    var gm = $('gateModal'); if (gm) gm.classList.add('hidden');
+    if (next) switchPage(next);
+  }
+
+  // ===== 回收站 =====
+  function renderTrash() {
+    var tbody = $('trashTbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (!db.trash.length) { $('trashEmpty').classList.remove('hidden'); return; }
+    $('trashEmpty').classList.add('hidden');
+    db.trash.slice().sort(function (a, b) { return b.deletedAt.localeCompare(a.deletedAt); }).forEach(function (f) {
+      var tr = document.createElement('tr');
+      var t = document.createElement('td'); t.textContent = f.deletedAt;
+      var ty = document.createElement('td');
+      var span = document.createElement('span'); span.className = 'type-tag'; span.textContent = f.type;
+      ty.appendChild(span);
+      var c = document.createElement('td'); c.textContent = f.content; c.style.maxWidth = '300px';
+      var co = fbContactCell(f);
+      var o = document.createElement('td');
+      var ops = document.createElement('div'); ops.className = 'ops';
+      var r1 = document.createElement('button'); r1.className = 'btn btn-sm btn-primary'; r1.textContent = '恢复';
+      r1.onclick = function () {
+        db.feedbacks.push({ id: f.id, siteKey: f.siteKey, type: f.type, content: f.content, contact: f.contact, phone: f.phone || '', email: f.email || '', reply: f.reply || '', status: 'new', createdAt: f.createdAt });
+        db.trash = db.trash.filter(function (x) { return x.id !== f.id; });
+        saveDB(); renderTrash(); loadStats();
+      };
+      ops.appendChild(r1);
+      var r2 = document.createElement('button'); r2.className = 'btn btn-sm btn-danger'; r2.textContent = '彻底删除';
+      r2.onclick = function () {
+        if (confirm('彻底删除后不可恢复，确认？')) {
+          db.trash = db.trash.filter(function (x) { return x.id !== f.id; });
+          saveDB(); renderTrash();
+        }
+      };
+      ops.appendChild(r2);
+      o.appendChild(ops);
+      tr.appendChild(t); tr.appendChild(ty); tr.appendChild(c); tr.appendChild(co); tr.appendChild(o);
+      tbody.appendChild(tr);
+    });
+  }
+  function emptyTrash() {
+    if (!db.trash.length) { alert('回收站是空的'); return; }
+    if (confirm('确认清空回收站？共 ' + db.trash.length + ' 条，清空后不可恢复。')) {
+      db.trash = [];
+      saveDB(); renderTrash();
+    }
+  }
+
+  // ===== 运营选题（未满足需求榜） =====
+  var OPS_STATE = { days: 30, data: null, error: '' };
+  function opsReasonText(r) {
+    if (r === 'retrieval-empty') return '库里没检索到';
+    if (r === 'insufficient-context') return '站内上下文不足';
+    if (r === 'llm-failed') return '模型调用失败';
+    return r || '—';
+  }
+  function loadOpsTopics() {
+    if (typeof isGuest === 'function' && isGuest()) return;
+    var st = $('opsStatus');
+    if (st && !OPS_STATE.data) st.innerHTML = '<span class="hint-note">正在拉取运营选题…</span>';
+    return recRequest('/api/ops-topics?days=' + OPS_STATE.days + '&limit=20').then(function (data) {
+      OPS_STATE.data = data;
+      OPS_STATE.error = '';
+      renderOpsTopics();
+      return data;
+    }).catch(function (err) {
+      OPS_STATE.error = (err && err.message) ? err.message : '未知错误';
+      renderOpsTopics();
+    });
+  }
+  function renderOpsTopics() {
+    var st = $('opsStatus'), statsEl = $('opsStats');
+    var ml = $('opsMissingList'), ql = $('opsQuestionList');
+    if (!st || !statsEl || !ml || !ql) return;
+    if (OPS_STATE.error) {
+      st.className = 'list-status';
+      st.innerHTML = '<span class="list-err">拉取失败：' + esc(OPS_STATE.error)
+        + '<br>请确认「系统设置 → 推荐机型接口配置」中的后端地址与管理令牌，然后点击「刷新榜单」重试。</span>';
+      statsEl.innerHTML = '';
+      ml.innerHTML = '<p class="empty">—</p>';
+      ql.innerHTML = '<p class="empty">—</p>';
+      return;
+    }
+    var d = OPS_STATE.data || {};
+    var s = d.stats || {};
+    st.className = 'list-status';
+    st.innerHTML = '<span class="hint-note">统计窗口：近 ' + (d.days || OPS_STATE.days) + ' 天 · 更新于 ' + esc(recFmtTime(d.updatedAt)) + '</span>';
+    statsEl.innerHTML = ''
+      + '<div class="ops-stat"><div class="ops-stat-num">' + (s.searchTotal || 0) + '</div><div class="ops-stat-label">自然语言找飞机 · 检索次数</div></div>'
+      + '<div class="ops-stat"><div class="ops-stat-num">' + (s.searchMiss || 0) + ' <span style="font-size:12px;color:#9dc4ff">(' + (s.searchMissRate || 0) + '%)</span></div><div class="ops-stat-label">其中未命中（库里没有）</div></div>'
+      + '<div class="ops-stat"><div class="ops-stat-num">' + (s.qaTotal || 0) + '</div><div class="ops-stat-label">问 AI · 提问次数</div></div>'
+      + '<div class="ops-stat"><div class="ops-stat-num">' + (s.qaMiss || 0) + ' <span style="font-size:12px;color:#ffc46b">(' + (s.qaMissRate || 0) + '%)</span></div><div class="ops-stat-label">其中答不上来</div></div>';
+    var ma = d.missingAircraft || [];
+    if (!ma.length) {
+      ml.innerHTML = '<p class="empty">暂无未命中记录：要么用户想找的机型库里都有，要么还没人用自然语言找飞机。</p>';
+    } else {
+      ml.innerHTML = ma.map(function (x, i) {
+        return '<div class="ops-item"><span class="ops-item-idx">' + (i + 1) + '</span>'
+          + '<div class="ops-item-main"><div class="ops-item-term">' + esc(x.term || '') + '</div>'
+          + '<div class="ops-item-meta">被找 ' + (x.count || 0) + ' 次 · 最近 ' + esc(recFmtTime(x.lastAt)) + '</div></div>'
+          + '<button class="btn btn-sm btn-ghost" data-ops-copy-m="' + i + '">复制选题</button></div>';
+      }).join('');
+    }
+    var uq = d.unansweredQuestions || [];
+    if (!uq.length) {
+      ql.innerHTML = '<p class="empty">暂无答不上来的问题：RAG 检索都能覆盖，或还没有问答记录。</p>';
+    } else {
+      ql.innerHTML = uq.map(function (x, i) {
+        return '<div class="ops-item"><span class="ops-item-idx">' + (i + 1) + '</span>'
+          + '<div class="ops-item-main"><div class="ops-item-term">' + esc(x.question || '') + '</div>'
+          + '<div class="ops-item-meta">被问 ' + (x.count || 0) + ' 次 · ' + esc(opsReasonText(x.reason)) + ' · 最近 ' + esc(recFmtTime(x.lastAt)) + '</div></div>'
+          + '<button class="btn btn-sm btn-ghost" data-ops-copy-q="' + i + '">复制选题</button></div>';
+      }).join('');
+    }
+  }
+
+  // ===== AI 预审助手（待审推荐 → 建议卡） =====
+  var AI_AUDIT_STATE = { running: false, batch: false, cache: {} };
+  function aiAuditCtx() {
+    var lines = [];
+    var approved = REC_STATE.items.filter(function (x) { return x.status === 'approved'; });
+    lines.push('已采纳机型（共 ' + approved.length + ' 款，用于重复检测）：');
+    approved.slice(0, 80).forEach(function (x) { lines.push('- ' + (x.nameZh || '') + (x.code ? ' / ' + x.code : '')); });
+    var pending = REC_STATE.items.filter(function (x) { return (x.status || 'pending') === 'pending'; });
+    lines.push('其他待审机型（用于重复检测）：');
+    pending.slice(0, 40).forEach(function (x) { lines.push('- ' + (x.nameZh || '') + (x.code ? ' / ' + x.code : '')); });
+    return lines.join(String.fromCharCode(10));
+  }
+  function aiAuditParse(raw) {
+    if (!raw) return null;
+    var t = String(raw).trim();
+    t = t.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+    if (t.charAt(0) !== '{') {
+      var i = t.indexOf('{');
+      var j = t.lastIndexOf('}');
+      if (i < 0 || j <= i) return null;
+      t = t.slice(i, j + 1);
+    }
+    try { return JSON.parse(t); } catch (e) { return null; }
+  }
+  function aiAuditRec(id) {
+    var item = null;
+    for (var i = 0; i < REC_STATE.items.length; i++) {
+      if (String(REC_STATE.items[i].id) === String(id)) { item = REC_STATE.items[i]; break; }
+    }
+    if (!item) return;
+    var box = $('recAiAdvice-' + id);
+    if (box) box.innerHTML = '<div class="ai-advice-card"><div class="ai-advice-head"><span>AI 预审中…</span></div><div class="ai-advice-row">正在分析机型规范名、规格单位与重复情况，请稍候…</div></div>';
+    var specs = item.specs ? (typeof item.specs === 'string' ? item.specs : JSON.stringify(item.specs)) : '';
+    var prompt = [
+      '你是民航机型数据库的资料审核助手。请审核下面这条用户提交的机型推荐，并严格只输出一个 JSON 对象，不要任何解释、不要 markdown 代码块。',
+      'JSON 字段要求：{"nameZh":"规范中文机型名","code":"规范型号（英文/数字代号）","category":"分类（窄体/宽体/支线/货机/公务机等）","specs":{"中文键":"标准化后的值"},"duplicate":{"isDup":true/false,"target":"重复对象","reason":"判断依据"},"decision":"approved 或 rejected","confidence":0-1 的小数,"replyDraft":"写给提交用户的中文反馈，80-160字，含规范结果与说明"}',
+      'specs 标准化要求：键名统一使用中文（如 航程 / 载客量 / 机身长度 / 翼展 / 巡航速度 / 最大起飞重量 / 发动机 / 首飞年份 / 生产年份），航程与长度等单位统一为 km/m，保留数值类型，去掉重复键与明显错别字。',
+      '重复检测：与下面已采纳机型、其他待审机型比对，若为同一机型（含中英文名、型号代号差异）则 isDup 为 true 并指出重复对象。',
+      '审核基准：机型名称与型号属实、分类无误、规格无明显错填 → approved；机型不存在、名称与型号明显不符、重复机型、规格严重失实 → rejected。',
+      '【待审机型】',
+      '中文名：' + (item.nameZh || ''),
+      '型号：' + (item.code || ''),
+      '分类：' + (item.category || ''),
+      '国家/地区：' + (item.country || ''),
+      '规格：' + specs,
+      '简介：' + (item.descZh || ''),
+      aiAuditCtx()
+    ].join(String.fromCharCode(10));
+    callGLMSummary(prompt).then(function (txt) {
+      var data = aiAuditParse(txt);
+      if (!data) {
+        if (box) box.innerHTML = '<div class="ai-advice-card"><div class="ai-advice-head"><span>AI 预审失败</span></div><div class="ai-advice-row">模型返回内容无法解析为结构化建议，可重试。</div><div class="ai-advice-actions"><button class="btn btn-sm btn-ghost" data-ai-audit="' + esc(id) + '">重新预审</button></div></div>';
+        return;
+      }
+      AI_AUDIT_STATE.cache[id] = data;
+      renderRecAiAdvice(id, data);
+    }).catch(function () {
+      if (box) box.innerHTML = '<div class="ai-advice-card"><div class="ai-advice-head"><span>AI 预审失败</span></div><div class="ai-advice-row">调用失败，请检查「系统设置」中的 AI 接口配置后重试。</div><div class="ai-advice-actions"><button class="btn btn-sm btn-ghost" data-ai-audit="' + esc(id) + '">重新预审</button></div></div>';
+    });
+  }
+  function renderRecAiAdvice(id, d) {
+    var box = $('recAiAdvice-' + id);
+    if (!box) return;
+    var specs = d.specs || {};
+    var specParts = [];
+    for (var k in specs) {
+      if (Object.prototype.hasOwnProperty.call(specs, k)) specParts.push(k + '：' + specs[k]);
+    }
+    var dup = d.duplicate || {};
+    var isApprove = (String(d.decision || '').toLowerCase() === 'approved');
+    var conf = (typeof d.confidence === 'number') ? Math.round(d.confidence * 100) + '%' : '—';
+    box.innerHTML = '<div class="ai-advice-card">'
+      + '<div class="ai-advice-head"><span>AI 建议卡 · 置信度 ' + conf + '</span><span>' + (isApprove ? '建议采纳' : '建议驳回') + '</span></div>'
+      + '<div class="ai-advice-row"><b>规范机型名：</b>' + esc(d.nameZh || '—') + ' &nbsp;<b>规范型号：</b>' + esc(d.code || '—') + '</div>'
+      + '<div class="ai-advice-row"><b>分类：</b>' + esc(d.category || '—') + '</div>'
+      + '<div class="ai-advice-row"><b>标准化 specs：</b>' + esc(specParts.length ? specParts.join(' · ') : '—') + '</div>'
+      + '<div class="ai-advice-row"><b>重复检测：</b>' + (dup.isDup ? ('疑似重复 → ' + esc(dup.target || '') + '（' + esc(dup.reason || '') + '）') : '未发现重复') + '</div>'
+      + '<div class="ai-advice-row"><b>反馈草稿：</b>' + esc(d.replyDraft || '—') + '</div>'
+      + '<div class="ai-advice-actions">'
+      + '<button class="btn btn-sm btn-primary" data-ai-apply="approved" data-id="' + esc(id) + '">用草稿采纳</button>'
+      + '<button class="btn btn-sm btn-danger" data-ai-apply="rejected" data-id="' + esc(id) + '">用草稿驳回</button>'
+      + '<button class="btn btn-sm btn-ghost" data-ai-copy="' + esc(id) + '">复制规范化字段</button>'
+      + '</div>'
+      + '<div class="ai-advice-note">建议由 AI 生成，采纳/驳回前请人工复核；草稿会自动填入反馈框，仍可编辑。</div>'
+      + '</div>';
+  }
+  function aiApplyAdvice(id, status) {
+    var d = AI_AUDIT_STATE.cache[id];
+    openRecReview(id, status);
+    var ta = $('recReplyInput');
+    if (ta && d && d.replyDraft) ta.value = String(d.replyDraft);
+  }
+  function aiCopyAdvice(id) {
+    var d = AI_AUDIT_STATE.cache[id];
+    if (!d) return;
+    var specs = d.specs || {};
+    var lines = ['机型名：' + (d.nameZh || ''), '型号：' + (d.code || ''), '分类：' + (d.category || '')];
+    for (var k in specs) {
+      if (Object.prototype.hasOwnProperty.call(specs, k)) lines.push(k + '：' + specs[k]);
+    }
+    var txt = lines.join(String.fromCharCode(10));
+    try {
+      navigator.clipboard.writeText(txt);
+      alert('规范化字段已复制到剪贴板');
+    } catch (e) {
+      alert('复制失败，请手动选择文本复制');
+    }
+  }
+  function aiAuditPendingBatch() {
+    if (AI_AUDIT_STATE.batch) { alert('批量预审进行中，请稍候'); return; }
+    var pending = REC_STATE.items.filter(function (x) { return (x.status || 'pending') === 'pending'; });
+    if (!pending.length) { alert('当前没有待审推荐'); return; }
+    var queue = pending.slice(0, 5).map(function (x) { return x.id; });
+    AI_AUDIT_STATE.batch = true;
+    var btn = $('recAiAuditAllBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'AI 预审中 0/' + queue.length; }
+    var done = 0;
+    function next() {
+      if (!queue.length) {
+        AI_AUDIT_STATE.batch = false;
+        if (btn) { btn.disabled = false; btn.textContent = 'AI 批量预审'; }
+        return;
+      }
+      var id = queue.shift();
+      aiAuditRec(id);
+      done++;
+      if (btn) btn.textContent = 'AI 预审中 ' + done + '/' + (done + queue.length);
+      setTimeout(next, 1800);
+    }
+    next();
+  }
+
+  // ===== AI 周报 =====
+  function buildWeeklyPrompt() {
+    var list = db.feedbacks;
+    var lines = [];
+    lines.push('请基于以下数据生成一份面向民航收藏馆运营的中文周报，要求：1) 篇幅不少于 600 字，分「本周概况」「热点问题」「机型与内容动向」「数据洞察」「下周行动」五个小标题；2) 用具体数字说明趋势与变化，不要空话；3) 「下周行动」给出 3-5 条可执行动作，明确到内容或机型补库；4) 语气专业克制，不要寒暄。');
+    lines.push('总反馈数：' + list.length);
+    var now = new Date();
+    var weekStart = now.getTime() - 6 * 86400000;
+    var wk = list.filter(function (f) {
+      var parts = f.createdAt.split(' ');
+      var d = new Date(parts[0].replace(/-/g, '/') + 'T' + (parts[1] || '00:00'));
+      return d.getTime() >= weekStart;
+    }).length;
+    lines.push('近7日反馈：' + wk);
+    lines.push('待处理：' + list.filter(function (f) { return f.status === 'new'; }).length);
+    // 推荐机型与主站行为数据
+    var wRecAll = (typeof REC_STATE !== 'undefined' && REC_STATE.items) ? REC_STATE.items : [];
+    if (wRecAll.length) {
+      var wPend = wRecAll.filter(function (x) { return (x.status || 'pending') === 'pending'; }).length;
+      var wAppr = wRecAll.filter(function (x) { return x.status === 'approved'; }).length;
+      lines.push('用户推荐机型：共 ' + wRecAll.length + ' 条（待审核 ' + wPend + ' / 已采纳 ' + wAppr + '）');
+    }
+    if (typeof OPS_STATE !== 'undefined' && OPS_STATE.data) {
+      var wd = OPS_STATE.data;
+      var ws = wd.stats || {};
+      lines.push('主站自然语言找飞机：检索 ' + (ws.searchTotal || 0) + ' 次，未命中 ' + (ws.searchMiss || 0) + ' 次');
+      if (wd.missingAircraft && wd.missingAircraft.length) {
+        lines.push('用户想找但库里没有的机型 Top：' + wd.missingAircraft.slice(0, 8).map(function (x) { return (x.term || '') + '(' + (x.count || 0) + '次)'; }).join('、'));
+      }
+      lines.push('主站问 AI：提问 ' + (ws.qaTotal || 0) + ' 次，答不上来 ' + (ws.qaMiss || 0) + ' 次');
+      if (wd.unansweredQuestions && wd.unansweredQuestions.length) {
+        lines.push('AI 答不上来的问题 Top：' + wd.unansweredQuestions.slice(0, 8).map(function (x) { return (x.question || '') + '(' + (x.count || 0) + '次)'; }).join('、'));
+      }
+    }
+    var dist = {};
+    list.forEach(function (f) { dist[f.type] = (dist[f.type] || 0) + 1; });
+    var keys = Object.keys(dist);
+    if (keys.length) {
+      lines.push('反馈类型分布：');
+      keys.forEach(function (k) { lines.push('- ' + k + '：' + dist[k] + '条'); });
+    }
+    return lines.join(String.fromCharCode(10));
+  }
+  function aiWeekly() {
+    var btn = $('aiWeeklyBtn');
+    btn.disabled = true; btn.textContent = '生成中…';
+    openAiResult('AI 周报');
+    $('aiResultBody').textContent = '正在生成 AI 周报，请稍候…';
+    callGLMSummary(buildWeeklyPrompt()).then(function (txt) {
+      var body = $('aiResultBody');
+      body.innerHTML = '';
+      var pre = document.createElement('div'); pre.className = 'weekly-text'; pre.textContent = txt || '（AI 未返回内容）';
+      body.appendChild(pre);
+      var copy = document.createElement('button'); copy.className = 'btn btn-sm btn-ghost'; copy.textContent = '复制周报';
+      copy.onclick = function () {
+        try { navigator.clipboard.writeText(txt || ''); alert('已复制到剪贴板'); }
+        catch (e) { alert('复制失败，请手动选择文本复制'); }
+      };
+      body.appendChild(copy);
+    }).catch(function () {
+      $('aiResultBody').textContent = 'AI 周报生成失败，请检查系统设置中的 API 配置后重试。';
+    }).finally(function () {
+      btn.disabled = false; btn.innerHTML = '生成 AI 周报<span class="ai-badge">AI</span>';
+    });
+  }
+
+  // ===== 密码修改 =====
+  function changePwd(e) {
+    e.preventDefault();
+    var u = findUser(state.session.username);
+    if (!u) { alert('账户不存在'); return; }
+    var oldP = $('oldPwd').value;
+    var newP = $('newPwd').value;
+    if (oldP !== u.password) { alert('原密码不正确'); return; }
+    if (!newP || newP.length < 4) { alert('新密码至少 4 位'); return; }
+    u.password = newP;
+    saveDB();
+    $('oldPwd').value = ''; $('newPwd').value = '';
+    // 同步服务端密码（失败仅提示，不阻断本地改密）
+    adminPwdSync(u.username, oldP, newP);
+    alert('密码已更新');
+  }
+
+  /** POST /api/admin-password：同步服务端密码；失败提示「服务端密码未同步，请检查登录会话」 */
+  function adminPwdSync(username, oldPassword, newPassword) {
+    try {
+      recRequest('/api/admin-password', {
+        method: 'POST',
+        body: { username: username, oldPassword: oldPassword, newPassword: newPassword }
+      }).catch(function (err) {
+        console.warn('[admin-password] 服务端密码未同步：', (err && err.message) ? err.message : err);
+        alert('服务端密码未同步，请检查登录会话');
+      });
+    } catch (e) {
+      console.warn('[admin-password] 服务端密码未同步：', e);
+    }
+  }
+
+  // ===== 备份 / 恢复 =====
+  function backup() {
+    var blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'aviation-admin-backup-' + todayStr() + '.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  function restore() {
+    $('restoreFile').click();
+  }
+  function onRestoreFile(e) {
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var data = JSON.parse(reader.result);
+        if (!data || !data.feedbacks) throw new Error('bad');
+        db = data;
+        if (!db.users) db.users = [ { username: 'henry', password: 'wanwan123', role: 'owner' } ];
+        if (!db.messages) db.messages = [];
+        if (!db.tickets) db.tickets = [];
+        if (!db.notices) db.notices = [];
+        if (!db.notes) db.notes = [];
+        if (!db.trash) db.trash = [];
+        saveDB();
+        alert('恢复成功');
+        location.reload();
+      } catch (err) {
+        alert('文件格式不正确，恢复失败');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }
+
+  // ===== AI 结果窗口 =====
+  function openAiResult(title) {
+    $('aiResultTitle').textContent = title || 'AI 输出';
+    $('aiResult').classList.remove('hidden');
+  }
+  function closeAiResult() {
+    $('aiResult').classList.add('hidden');
+  }
+
+  // ===== 会话 / 令牌管理 =====
+  function recordSession(source) {
+    var s = state.session;
+    if (!s || !s.sessionId) return;
+    db.sessions = db.sessions.filter(function (x) { return x.id !== s.sessionId; });
+    db.sessions.push({
+      id: s.sessionId,
+      username: s.username,
+      role: s.role,
+      source: source || '登录',
+      createdAt: nowStr(),
+      lastSeen: nowStr(),
+      status: 'active'
+    });
+    saveDB();
+  }
+  function touchSession() {
+    var s = state.session;
+    if (!s || !s.sessionId) return;
+    for (var i = 0; i < db.sessions.length; i++) {
+      if (db.sessions[i].id === s.sessionId) { db.sessions[i].lastSeen = nowStr(); }
+    }
+  }
+  function sessionAlive(sess) {
+    if (!sess || !sess.sessionId) return false;
+    for (var i = 0; i < db.sessions.length; i++) {
+      if (db.sessions[i].id === sess.sessionId) return db.sessions[i].status !== 'revoked';
+    }
+    return false;
+  }
+  function renderSessionList() {
+    var wrap = $('sessionList');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    var list = db.sessions.slice().sort(function (a, b) { return b.createdAt.localeCompare(a.createdAt); });
+    var head = document.createElement('div'); head.className = 'settings-subtitle'; head.textContent = '登录设备 / 会话';
+    wrap.appendChild(head);
+    if (!list.length) {
+      var e1 = document.createElement('p'); e1.className = 'token-empty'; e1.textContent = '暂无登录会话记录';
+      wrap.appendChild(e1);
+    }
+    list.forEach(function (s) {
+      var self = s.id === (state.session && state.session.sessionId);
+      var item = document.createElement('div');
+      item.className = 'token-item' + (s.status === 'revoked' ? ' revoked' : '');
+      var main = document.createElement('div'); main.className = 'token-main';
+      var nm = document.createElement('span'); nm.className = 'token-name';
+      nm.textContent = s.username + (s.role === 'owner' ? '（主管理员）' : s.role === 'admin' ? '（管理员）' : '（参观）') + (self ? '（当前设备）' : '');
+      var sb = document.createElement('span'); sb.className = 'token-sub';
+      sb.textContent = s.source + ' · 登录 ' + s.createdAt + ' · 活跃 ' + s.lastSeen;
+      main.appendChild(nm); main.appendChild(sb);
+      item.appendChild(main);
+      var st = document.createElement('span');
+      st.className = 'token-status ' + (s.status === 'active' ? 'active' : 'revoked');
+      st.textContent = s.status === 'active' ? '生效中' : '已下线';
+      item.appendChild(st);
+      var act = document.createElement('span'); act.className = 'token-actions';
+      if (s.status === 'active' && !self) {
+        var b = document.createElement('button'); b.className = 'btn btn-ghost btn-sm';
+        b.textContent = '下线'; b.onclick = function () { revokeSession(s.id, true); };
+        act.appendChild(b);
+      }
+      item.appendChild(act);
+      wrap.appendChild(item);
+    });
+  }
+  function revokeSession(id, silent) {
+    for (var i = 0; i < db.sessions.length; i++) {
+      if (db.sessions[i].id === id) { db.sessions[i].status = 'revoked'; db.sessions[i].revokedAt = nowStr(); }
+    }
+    saveDB();
+    if (!silent) alert('该设备已下线，其登录状态将失效。');
+    renderSessionList(); renderAdminTokenList();
+  }
+  function logoutOthers() {
+    var cur = state.session && state.session.sessionId;
+    db.sessions.forEach(function (s) { if (s.id !== cur && s.status === 'active') s.status = 'revoked'; });
+    saveDB(); renderSessionList(); renderAdminTokenList();
+    alert('已下线其他所有设备');
+  }
+  function logoutAllSessions() {
+    db.sessions.forEach(function (s) { s.status = 'revoked'; });
+    saveDB(); renderSessionList(); renderAdminTokenList();
+    alert('已下线全部设备，当前设备需重新登录后继续使用');
+  }
+
+  // ===== 主账号令牌 / 访客管理 =====
+  function renderAdminTokenList() {
+    var wrap = $('adminTokenList');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    var head = document.createElement('div'); head.className = 'settings-subtitle'; head.textContent = '主账号令牌管理';
+    wrap.appendChild(head);
+    var users = db.users.filter(function (u) { return u.role !== 'guest'; });
+    if (!users.length) {
+      var e2 = document.createElement('p'); e2.className = 'token-empty'; e2.textContent = '暂无账号';
+      wrap.appendChild(e2);
+    }
+    users.forEach(function (u) {
+      var item = document.createElement('div');
+      item.className = 'token-item' + (u.enabled === false ? ' revoked' : '');
+      var main = document.createElement('div'); main.className = 'token-main';
+      var nm = document.createElement('span'); nm.className = 'token-name';
+      nm.textContent = u.username + (u.role === 'owner' ? '（主管理员）' : '（管理员）');
+      var sb = document.createElement('span'); sb.className = 'token-sub';
+      sb.textContent = '创建于 ' + (u.createdAt || '-');
+      if (u.enabled === false) sb.textContent += ' · 已停用';
+      main.appendChild(nm); main.appendChild(sb);
+      item.appendChild(main);
+      if (u.token) {
+        var code = document.createElement('span'); code.className = 'token-code'; code.textContent = u.token;
+        item.appendChild(code);
+      }
+      var st = document.createElement('span');
+      st.className = 'token-status ' + (u.enabled === false ? 'revoked' : 'active');
+      st.textContent = u.enabled === false ? '已停用' : '生效中';
+      item.appendChild(st);
+      if (u.role !== 'owner') {
+        var act = document.createElement('span'); act.className = 'token-actions';
+        var b = document.createElement('button'); b.className = 'btn btn-ghost btn-sm';
+        b.textContent = u.enabled === false ? '启用' : '停用';
+        b.onclick = function () { toggleUser(u); };
+        act.appendChild(b);
+        if (u.token) {
+          var c = document.createElement('button'); c.className = 'btn btn-danger btn-sm';
+          c.textContent = '吊销令牌'; c.onclick = function () { revokeToken(u); };
+          act.appendChild(c);
+        }
+        item.appendChild(act);
+      }
+      wrap.appendChild(item);
+    });
+  }
+  function toggleUser(u) {
+    u.enabled = (u.enabled === false) ? true : false;
+    if (u.enabled === false) u.token = null;
+    saveDB(); renderAdminTokenList();
+    alert(u.enabled === false ? '账号已停用，其登录将立即失效' : '账号已启用');
+  }
+  function revokeToken(u) {
+    if (!confirm('确认吊销账号「' + u.username + '」的长期令牌？吊销后需重新申请。')) return;
+    u.token = null;
+    saveDB(); renderAdminTokenList();
+    alert('令牌已吊销');
+  }
+  function renderVisitorAdminList() {
+    var wrap = $('visitorAdminList');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    var head = document.createElement('div'); head.className = 'settings-subtitle'; head.textContent = '访客动态码与申请';
+    wrap.appendChild(head);
+    var tickets = db.tickets.slice().sort(function (a, b) { return b.createdAt.localeCompare(a.createdAt); });
+    if (!tickets.length && !db.visitorOnce) {
+      var e3 = document.createElement('p'); e3.className = 'token-empty'; e3.textContent = '暂无访客记录';
+      wrap.appendChild(e3);
+    }
+    tickets.forEach(function (t) {
+      var item = document.createElement('div');
+      item.className = 'token-item' + (t.used ? ' revoked' : '');
+      var main = document.createElement('div'); main.className = 'token-main';
+      var nm = document.createElement('span'); nm.className = 'token-name';
+      nm.textContent = t.used ? '已使用' : '未使用';
+      var sb = document.createElement('span'); sb.className = 'token-sub';
+      sb.textContent = '生成于 ' + t.createdAt + (t.usedAt ? ' · 使用于 ' + t.usedAt : '');
+      main.appendChild(nm); main.appendChild(sb);
+      item.appendChild(main);
+      var code = document.createElement('span'); code.className = 'token-code'; code.textContent = t.code;
+      item.appendChild(code);
+      var st = document.createElement('span');
+      st.className = 'token-status ' + (t.used ? 'revoked' : 'active');
+      st.textContent = t.used ? '已失效' : '生效中';
+      item.appendChild(st);
+      var act = document.createElement('span'); act.className = 'token-actions';
+      if (!t.used) {
+        var b = document.createElement('button'); b.className = 'btn btn-danger btn-sm';
+        b.textContent = '作废'; b.onclick = function () { voidTicket(t); };
+        act.appendChild(b);
+      }
+      item.appendChild(act);
+      wrap.appendChild(item);
+    });
+    if (db.visitorOnce && db.visitorOnce.applied) {
+      var v = db.visitorOnce;
+      var vi = document.createElement('div');
+      vi.className = 'token-item';
+      var vm = document.createElement('div'); vm.className = 'token-main';
+      var vn = document.createElement('span'); vn.className = 'token-name';
+      vn.textContent = '访客申请：' + (v.username || '-') + '（' + (v.type === 'admin-request' ? '管理员' : '长期令牌') + '）';
+      var vs = document.createElement('span'); vs.className = 'token-sub';
+      vs.textContent = '状态：' + (v.status === 'pending' ? '等待审批' : v.status === 'approved' ? '已通过' : '已驳回') + ' · ' + (v.createdAt || '');
+      vm.appendChild(vn); vm.appendChild(vs);
+      vi.appendChild(vm);
+      if (v.status === 'pending') {
+        var va = document.createElement('span'); va.className = 'token-actions';
+        var ok = document.createElement('button'); ok.className = 'btn btn-ghost btn-sm'; ok.textContent = '通过';
+        ok.onclick = function () { approveVisitor(v, true); };
+        var no = document.createElement('button'); no.className = 'btn btn-danger btn-sm'; no.textContent = '驳回';
+        no.onclick = function () { approveVisitor(v, false); };
+        va.appendChild(ok); va.appendChild(no);
+        vi.appendChild(va);
+      }
+      wrap.appendChild(vi);
+    }
+  }
+  function voidTicket(t) {
+    if (!confirm('确认作废动态码 ' + t.code + ' ？')) return;
+    t.used = true; t.usedAt = nowStr();
+    saveDB(); renderVisitorAdminList();
+    alert('已作废');
+  }
+  function approveVisitor(v, ok) {
+    v.status = ok ? 'approved' : 'rejected';
+    if (ok) {
+      v.token = genCode() + '-' + genCode();
+      db.users.push({ username: v.username, password: v.token, role: v.type === 'admin-request' ? 'admin' : 'guest', token: v.token, enabled: true, createdAt: nowStr() });
+      db.messages.push({ id: genId(), type: 'notice', title: '申请已通过', content: '「' + v.username + '」的申请已通过，令牌已生成。', status: 'read', createdAt: nowStr() });
+    } else {
+      db.messages.push({ id: genId(), type: 'notice', title: '申请被驳回', content: '「' + v.username + '」的申请已被驳回。', status: 'read', createdAt: nowStr() });
+    }
+    saveDB(); renderVisitorAdminList(); renderAdminTokenList(); refreshMsgDot();
+    alert(ok ? '已通过并生成令牌' : '已驳回');
+  }
+
+  // ===== 个性化主题 =====
+  var THEMES = [
+    { id: 'default', name: '深邃星空', css: 'linear-gradient(160deg,#0b1220 0%,#0f1c33 40%,#101d3a 100%)' },
+    { id: 'gold', name: '鎏金复古', css: 'linear-gradient(160deg,#12100a 0%,#231c10 35%,#3a2d16 65%,#181206 100%)' },
+    { id: 'aurora', name: '极光幻境', css: 'linear-gradient(160deg,#061018 0%,#0b2a3a 35%,#0f3d55 65%,#081a26 100%)' },
+    { id: 'sunset', name: '日落暖霞', css: 'linear-gradient(160deg,#1c0f14 0%,#3a1626 35%,#57203a 65%,#220f18 100%)' }
+  ];
+  function applyTheme() {
+    var t = db.theme || 'default';
+    document.body.classList.remove('theme-gold', 'theme-aurora', 'theme-sunset');
+    if (t !== 'default') document.body.classList.add('theme-' + t);
+  }
+  function renderThemePicker() {
+    var wrap = $('themePicker');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    THEMES.forEach(function (t) {
+      var sw = document.createElement('div');
+      sw.className = 'theme-swatch' + (db.theme === t.id ? ' active' : '');
+      var pv = document.createElement('div'); pv.className = 'theme-preview';
+      pv.style.background = t.css;
+      var nm = document.createElement('div'); nm.className = 'theme-name'; nm.textContent = t.name;
+      sw.appendChild(pv); sw.appendChild(nm);
+      sw.onclick = function () {
+        db.theme = t.id;
+        saveDB(); applyTheme(); renderThemePicker();
+      };
+      wrap.appendChild(sw);
+    });
+  }
+
+  // ===== 系统设置页渲染 =====
+  function renderSettings() {
+    renderThemePicker();
+    renderSessionList();
+    renderAdminTokenList();
+    renderVisitorAdminList();
+    var bi = $('apiBaseInput'); if (bi) bi.value = (db.settings.adminApiBase || '');
+    var ti = $('apiTokenInput'); if (ti) ti.value = (db.settings.adminToken || '');
+    var smsOn = $('smsEnabledInput'); if (smsOn) smsOn.checked = !!db.settings.smsEnabled;
+    var smsSel = $('smsTemplateSelect');
+    if (smsSel) {
+      var savedTpl = (db.settings.smsTemplateCode || '').trim();
+      if (savedTpl && savedTpl !== '100001') {
+        smsSel.value = 'custom';
+        var smsCus = $('smsTemplateCustomInput');
+        if (smsCus) { smsCus.value = savedTpl; smsCus.classList.remove('hidden'); }
+      } else {
+        smsSel.value = '100001';
+        var smsCus2 = $('smsTemplateCustomInput');
+        if (smsCus2) smsCus2.classList.add('hidden');
+      }
+    }
+    var quotaIn = $('smsQuotaInput'); if (quotaIn) quotaIn.value = smsQuota();
+    var tipIn = $('tipTextInput'); if (tipIn) tipIn.value = (db.settings.tipText || '欢迎回来，管理中枢运行中');
+    renderAdminSessionState(false);
+    updateSessionSummary();
+    touchSession(); saveDB();
+    // 打开设置页时刷新服务端会话状态（管理员）
+    if (isAdmin()) checkAdminSession();
+  }
+
+  // ===== 消息中心 =====
+  function refreshMsgDot() {
+    var pending = db.messages.filter(function (m) { return m.status === 'pending'; }).length;
+    $('msgDot').classList.toggle('hidden', !(pending > 0 && isOwner()));
+  }
+  function openMsg() {
+    if (isGuest()) return;
+    renderMsgList();
+    $('msgModal').classList.remove('hidden');
+  }
+  function renderMsgList() {
+    var wrap = $('msgList');
+    wrap.innerHTML = '';
+    var mine = db.messages.filter(function (m) {
+      if (isOwner()) return true;
+      if (m.type === 'notice') return true;
+      return m.to === state.session.username;
+    }).sort(function (a, b) { return b.createdAt.localeCompare(a.createdAt); });
+    if (!mine.length) {
+      var p = document.createElement('p');
+      p.className = 'msg-empty'; p.textContent = '暂无消息';
+      wrap.appendChild(p);
+      return;
+    }
+    mine.forEach(function (m) {
+      var item = document.createElement('div');
+      item.className = 'msg-item' + (m.status === 'pending' ? ' pending' : '');
+      var head = document.createElement('div'); head.className = 'msg-head';
+      var tp = document.createElement('span');
+      tp.className = 'msg-type ' + m.type;
+      tp.textContent = m.type === 'admin-request' ? '管理员申请' : (m.type === 'token-request' ? '长期令牌申请' : '通知');
+      head.appendChild(tp);
+      var ti = document.createElement('span'); ti.className = 'msg-title'; ti.textContent = m.title;
+      head.appendChild(ti);
+      var tm = document.createElement('span'); tm.className = 'msg-time'; tm.textContent = m.createdAt;
+      head.appendChild(tm);
+      item.appendChild(head);
+      var body = document.createElement('div'); body.className = 'msg-body';
+      var text = m.content || '';
+      if (m.type !== 'notice') {
+        text += String.fromCharCode(10) + '申请人：' + m.applicant + String.fromCharCode(10) + '申请理由：' + (m.reason || '未填写');
+        text += String.fromCharCode(10) + '状态：' + (m.status === 'pending' ? '待确认（预计两天内处理）' : (m.status === 'approved' ? '已同意' : '已驳回'));
+      }
+      body.textContent = text;
+      item.appendChild(body);
+      if (m.status === 'approved' && m.token) {
+        var tk = document.createElement('div');
+        tk.className = 'msg-token';
+        tk.textContent = '固定令牌：' + m.token;
+        item.appendChild(tk);
+      }
+      if (m.status === 'pending' && isOwner()) {
+        var acts = document.createElement('div'); acts.className = 'msg-actions';
+        var ok = document.createElement('button'); ok.className = 'btn btn-sm btn-primary'; ok.textContent = '同意';
+        ok.onclick = function () { approveRequest(m.id); };
+        var no = document.createElement('button'); no.className = 'btn btn-sm btn-danger'; no.textContent = '驳回';
+        no.onclick = function () { rejectRequest(m.id); };
+        acts.appendChild(ok); acts.appendChild(no);
+        item.appendChild(acts);
+      }
+      wrap.appendChild(item);
+    });
+  }
+  function approveRequest(id) {
+    var m = db.messages.filter(function (x) { return x.id === id; })[0];
+    if (!m) return;
+    if (findUser(m.applicant)) { m.status = 'approved'; m.content += String.fromCharCode(10) + '（该用户已是管理员，未重复发放）'; saveDB(); renderMsgList(); refreshMsgDot(); return; }
+    var token = genCode();
+    db.users.push({ username: m.applicant, password: token, role: 'admin', createdAt: nowStr(), via: 'approval' });
+    m.status = 'approved';
+    m.token = token;
+    m.decidedAt = nowStr();
+    m.content += String.fromCharCode(10) + '已于 ' + nowStr() + ' 同意，并发放固定令牌。';
+    if (db.visitorOnce && db.visitorOnce.applied && db.visitorOnce.username === m.applicant) {
+      db.visitorOnce.status = 'approved';
+      db.visitorOnce.token = token;
+    }
+    saveDB();
+    renderMsgList(); refreshMsgDot();
+  }
+  function rejectRequest(id) {
+    var m = db.messages.filter(function (x) { return x.id === id; })[0];
+    if (!m) return;
+    m.status = 'rejected';
+    m.decidedAt = nowStr();
+    m.content += String.fromCharCode(10) + '已于 ' + nowStr() + ' 驳回。';
+    if (db.visitorOnce && db.visitorOnce.applied && db.visitorOnce.username === m.applicant) {
+      db.visitorOnce.status = 'rejected';
+    }
+    saveDB();
+    renderMsgList(); refreshMsgDot();
+  }
+
+  // ===== 访客 AI =====
+  var visitorIntroHTML = ''
+    + '<div class="intro-block">'
+    + '<h3>✈ 民航客机收藏馆</h3>'
+    + '<p>民航客机收藏馆是一个以「单文件 HTML」打造的民航主题网站，目前为 v53 版本，历经 135+ 次迭代打磨，累计 11679 行代码，2026 年暑假连续多日更新上线。</p>'
+    + '<h4>网站功能</h4>'
+    + '<div class="intro-feature"><span class="ic">🛫</span>机型百科：主流客机参数速查</div>'
+    + '<div class="intro-feature"><span class="ic">🎨</span>涂装画廊：多航司涂装展示</div>'
+    + '<div class="intro-feature"><span class="ic">📷</span>照片识机：上传照片识别机型</div>'
+    + '<div class="intro-feature"><span class="ic">🤖</span>AI 机型故事与收藏分析</div>'
+    + '<div class="intro-feature"><span class="ic">💬</span>反馈与建议：向站长留言</div>'
+    + '<h4>后台管理系统</h4>'
+    + '<p>本系统（aviation-admin）是收藏馆的独立管理中枢，深色玻璃拟态风格，与主网页视觉一致。提供：</p>'
+    + '<ul>'
+    + '<li>数据看板：今日反馈、待处理、浏览统计、类型分布一目了然</li>'
+    + '<li>反馈管理：查看、标记、回复、导出访客留言</li>'
+    + '<li>站点管理：多站点数据隔离与配置</li>'
+    + '<li>系统设置：密码修改、数据备份与恢复</li>'
+    + '<li>AI 自动总结：一键生成运营要点</li>'
+    + '<li>消息中心：管理员申请审批、系统通知</li>'
+    + '</ul>'
+    + '<h4>效果展示</h4>'
+    + '<div class="showcase-row">'
+    + '<div class="showcase-item"><div class="showcase-window sw-login"><div class="sw-bar"></div><div class="sw-dot"></div><div class="sw-line short"></div><div class="sw-line"></div><div class="sw-btn"></div></div><p>登录页 · 密码登录</p></div>'
+    + '<div class="showcase-item"><div class="showcase-window sw-dash"><div class="sw-bar"></div><div class="sw-cards"><i></i><i></i><i></i><i></i></div><div class="sw-chart"></div></div><p>数据看板 · 实时统计</p></div>'
+    + '<div class="showcase-item"><div class="showcase-window sw-ai"><div class="sw-bar"></div><div class="sw-ai-btn"></div><div class="sw-ai-text w80"></div><div class="sw-ai-text w60"></div><div class="sw-ai-text w80"></div></div><p>AI 总结 · 一键生成</p></div>'
+    + '</div>'
+    + '<h4>访客权限说明</h4>'
+    + '<p>访客可获得一次性 AI 动态密码用于参观（仅限浏览数据看板，无法更改任何数据）。如需成为管理员，请在下方对话框输入「添加新管理员」提交申请，主管理员会在两天内确认并发放固定令牌。</p>'
+    + '</div>';
+
+  function openVisitor() {
+    visitorApplyStep = null;
+    visitorApplyData = null;
+    visitorApplyType = null;
+    $('visitorIntro').innerHTML = visitorIntroHTML;
+    $('visitorOverlay').classList.remove('hidden');
+    $('visitorChatLog').innerHTML = '';
+    // 自动发放一次性参观动态码
+    var code = genCode();
+    db.tickets.push({ code: code, used: false, createdAt: nowStr() });
+    saveDB();
+    aiSay('你好呀，欢迎来到民航收藏馆访客中心～');
+    aiSay('已为你生成一次性 AI 动态密码，仅可使用一次，用于参观（只读看板，不可更改任何数据）：');
+    var codeBox = document.createElement('div');
+    codeBox.className = 'chat-code'; codeBox.textContent = code;
+    var msg = document.createElement('div'); msg.className = 'chat-msg ai';
+    msg.appendChild(codeBox);
+    $('visitorChatLog').appendChild(msg);
+    aiSay('你可以这样使用：' + String.fromCharCode(10) + '· 在登录页输入用户名 visitor、密码填上面的动态码进入参观' + String.fromCharCode(10) + '· 输入「添加新管理员」申请成为管理员（每个用户仅一次）' + String.fromCharCode(10) + '· 输入「申请长期令牌」申请长期固定令牌' + String.fromCharCode(10) + '· 输入「查看我的申请」查询审批进度与令牌');
+  }
+  function closeVisitor() {
+    $('visitorOverlay').classList.add('hidden');
+  }
+  function aiSay(text) {
+    var msg = document.createElement('div');
+    msg.className = 'chat-msg ai';
+    msg.textContent = text;
+    $('visitorChatLog').appendChild(msg);
+    $('visitorChatLog').scrollTop = $('visitorChatLog').scrollHeight;
+  }
+  var visitorApplyStep = null; // null | 'ask_user' | 'ask_reason' | 'finish'
+  function visitorSend() {
+    var input = $('visitorInput');
+    var val = input.value.trim();
+    if (!val) return;
+    input.value = '';
+    var u = document.createElement('div');
+    u.className = 'chat-msg user';
+    u.textContent = val;
+    $('visitorChatLog').appendChild(u);
+    $('visitorChatLog').scrollTop = $('visitorChatLog').scrollHeight;
+    setTimeout(function () {
+      if (visitorApplyStep === 'ask_user') { applyStepUser(val); }
+      else if (visitorApplyStep === 'ask_reason') { applyStepReason(val); }
+      else { aiReply(val); }
+    }, 300);
+  }
+  function applyStepUser(val) {
+    var username = val.trim().toLowerCase();
+    if (!username || !/^[a-z0-9_]{2,20}$/.test(username)) {
+      aiSay('用户名需为 2-20 位小写字母、数字或下划线，请重新输入：');
+      return;
+    }
+    if (findUser(username)) { aiSay('该用户名已被占用，请换一个用户名重新输入：'); return; }
+    visitorApplyStep = 'ask_reason';
+    visitorApplyData = { type: visitorApplyType, username: username };
+    aiSay('用户名「' + username + '」可用。请填写申请理由（可输入「无」直接跳过）：');
+  }
+  function applyStepReason(val) {
+    var reason = val.trim() || '未填写';
+    if (reason.toLowerCase() === '无') reason = '未填写';
+    var data = visitorApplyData;
+    var id = genId();
+    db.messages.push({
+      id: id,
+      type: data.type,
+      title: data.type === 'admin-request' ? '新管理员申请' : '长期固定令牌申请',
+      content: '收到一份' + (data.type === 'admin-request' ? '管理员' : '长期令牌') + '申请，等待主管理员确认（预计两天内）。',
+      applicant: data.username,
+      reason: reason,
+      status: 'pending',
+      createdAt: nowStr()
+    });
+    db.visitorOnce = { applied: true, type: data.type, username: data.username, status: 'pending', token: null };
+    saveDB();
+    visitorApplyStep = 'finish';
+    visitorApplyData = null;
+    aiSay('申请已提交！主管理员会在两天内确认你的申请，确认通过后 AI 将向本机发放固定令牌（用于登录后台编辑与回复信息）。' + String.fromCharCode(10) + '期间可用「查看我的申请」查询进度。');
+  }
+  function aiReply(text) {
+    var low = text.toLowerCase();
+    if (low.indexOf('添加新管理员') >= 0 || low.indexOf('添加管理员') >= 0) {
+      handleApply('admin-request');
+    } else if (low.indexOf('长期令牌') >= 0 || low.indexOf('长期') >= 0 || low.indexOf('固定令牌') >= 0) {
+      handleApply('token-request');
+    } else if (low.indexOf('查看我的申请') >= 0 || low.indexOf('我的申请') >= 0) {
+      checkApply();
+    } else if (low.indexOf('动态密码') >= 0 || low.indexOf('参观码') >= 0 || low.indexOf('密码') >= 0) {
+      var code = genCode();
+      db.tickets.push({ code: code, used: false, createdAt: nowStr() });
+      saveDB();
+      aiSay('已重新生成一次性参观动态码（仅可使用一次）：');
+      var cb = document.createElement('div'); cb.className = 'chat-code'; cb.textContent = code;
+      var m = document.createElement('div'); m.className = 'chat-msg ai';
+      m.appendChild(cb);
+      $('visitorChatLog').appendChild(m);
+      $('visitorChatLog').scrollTop = $('visitorChatLog').scrollHeight;
+    } else if (low.indexOf('介绍') >= 0 || low.indexOf('功能') >= 0 || low.indexOf('后台') >= 0) {
+      aiSay('本系统提供数据看板、反馈管理、站点管理、系统设置与 AI 自动总结，详见左侧介绍板块。输入「添加新管理员」可提交管理员申请。');
+    } else if (low.indexOf('你好') >= 0 || low.indexOf('hi') >= 0 || low.indexOf('hello') >= 0) {
+      aiSay('你好呀！需要参观密码、申请管理员或了解功能，都可以直接告诉我～');
+    } else {
+      aiSay('我没太理解这句话～试试输入：「添加新管理员」「申请长期令牌」「查看我的申请」或「动态密码」。');
+    }
+  }
+  var visitorApplyType = null;
+  var visitorApplyData = null;
+  function handleApply(type) {
+    if (db.visitorOnce && db.visitorOnce.applied) {
+      aiSay('每个用户仅能使用一次申请功能哦～你已提交过「' + (db.visitorOnce.type === 'admin-request' ? '管理员申请' : '长期令牌申请') + '」，状态：' + (db.visitorOnce.status === 'pending' ? '等待管理员确认中（预计两天内）' : (db.visitorOnce.status === 'approved' ? '已通过，输入「查看我的申请」获取令牌' : '已被驳回')) + '。');
+      return;
+    }
+    visitorApplyType = type;
+    visitorApplyStep = 'ask_user';
+    visitorApplyData = null;
+    aiSay('好的，开始申请' + (type === 'admin-request' ? '管理员' : '长期固定令牌') + '。请先输入你希望使用的用户名（2-20 位小写字母、数字或下划线）：');
+  }
+  function checkApply() {
+    if (!db.visitorOnce || !db.visitorOnce.applied) {
+      aiSay('你还没有提交过申请。输入「添加新管理员」或「申请长期令牌」即可申请。');
+      return;
+    }
+    var v = db.visitorOnce;
+    if (v.status === 'pending') {
+      aiSay('你的「' + (v.type === 'admin-request' ? '管理员' : '长期令牌') + '申请」正在等待主管理员确认，预计两天内会有结果，请耐心等待～');
+    } else if (v.status === 'approved') {
+      aiSay('恭喜！你的申请已通过。固定令牌为（登录时作为密码，用户名：' + v.username + '，可用于编辑与回复信息）：');
+      var cb = document.createElement('div'); cb.className = 'chat-code'; cb.textContent = v.token;
+      var m = document.createElement('div'); m.className = 'chat-msg ai';
+      m.appendChild(cb);
+      $('visitorChatLog').appendChild(m);
+      $('visitorChatLog').scrollTop = $('visitorChatLog').scrollHeight;
+      aiSay('如需长期使用，可向主管理员申请长期固定令牌。');
+    } else {
+      aiSay('很遗憾，你的申请已被驳回。如需再次申请，请联系主管理员。');
+    }
+  }
+
+  // ===== 事件绑定 =====
+  function bindEvents() {
+    $('loginForm').addEventListener('submit', doLogin);
+    $('logoutBtn').addEventListener('click', logout);
+    $('visitorLink').addEventListener('click', function (e) { e.preventDefault(); openVisitor(); });
+    $('visitorClose').addEventListener('click', closeVisitor);
+    $('visitorSend').addEventListener('click', visitorSend);
+    $('visitorInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') visitorSend(); });
+    $('msgBtn').addEventListener('click', openMsg);
+    $('msgClose').addEventListener('click', function () { $('msgModal').classList.add('hidden'); });
+    $('siteSelector').addEventListener('change', function () { state.siteId = this.value; loadFeedbacks(); loadStats(); });
+    $('statusChips').addEventListener('click', function (e) {
+      var chip = e.target.closest('.chip');
+      if (!chip) return;
+      document.querySelectorAll('.chip').forEach(function (c) { c.classList.remove('active'); });
+      chip.classList.add('active');
+      state.statusFilter = chip.getAttribute('data-status');
+      loadFeedbacks();
+    });
+    $('searchInput').addEventListener('input', function () { state.search = this.value; loadFeedbacks(); });
+    $('exportBtn').addEventListener('click', exportCsv);
+    // 反馈管理：明细表格 / 月度汇总 视图切换、按月份筛选、月度汇总导出（口径与主站一致）
+    $('fbViewChips').addEventListener('click', function (e) {
+      var chip = e.target.closest('#fbViewChips .chip');
+      if (!chip) return;
+      state.fbView = chip.getAttribute('data-view') || 'detail';
+      fbApplyView();
+    });
+    $('fbMonthSelect').addEventListener('change', function () {
+      state.monthFilter = this.value || 'all';
+      loadFeedbacks();
+    });
+    $('fbMonthlyExportBtn').addEventListener('click', exportMonthlyCsv);
+    $('aiSummaryBtn').addEventListener('click', aiSummary);
+    $('aiWeeklyBtn').addEventListener('click', aiWeekly);
+    $('noteAddBtn').addEventListener('click', addNote);
+    $('noteInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') addNote(); });
+    $('addNoticeBtn').addEventListener('click', openNoticeModal);
+    $('noticeCancel').addEventListener('click', function () { $('noticeModal').classList.add('hidden'); });
+    $('noticeForm').addEventListener('submit', addNotice);
+    // 公告范围选择（对外 / 对内）
+    var scopeChips = document.querySelectorAll('#noticeScopeChips .chip');
+    for (var sc = 0; sc < scopeChips.length; sc++) {
+      scopeChips[sc].addEventListener('click', function () {
+        ANN_STATE.scope = this.getAttribute('data-scope') === 'internal' ? 'internal' : 'public';
+        for (var k = 0; k < scopeChips.length; k++) {
+          scopeChips[k].classList.toggle('active', scopeChips[k] === this);
+        }
+      });
+    }
+    // 公告列表筛选 + 刷新
+    var annChips = document.querySelectorAll('#annChips .chip');
+    for (var ac = 0; ac < annChips.length; ac++) {
+      annChips[ac].addEventListener('click', function () {
+        ANN_STATE.filter = this.getAttribute('data-ann') || 'active';
+        renderNotices();
+      });
+    }
+    var annRefresh = $('annRefreshBtn');
+    if (annRefresh) annRefresh.addEventListener('click', function () { loadAnnouncements(true); });
+    // 敏感面板身份验证（登录密码）
+    var gateForm = $('gateForm');
+    if (gateForm) gateForm.addEventListener('submit', verifyGate);
+    var gateCancel = $('gateCancel');
+    if (gateCancel) gateCancel.addEventListener('click', closeGate);
+    $('emptyTrashBtn').addEventListener('click', emptyTrash);
+    $('addSiteBtn').addEventListener('click', function () { $('siteModal').classList.remove('hidden'); });
+    $('modalCancel').addEventListener('click', function () { $('siteModal').classList.add('hidden'); });
+    $('siteForm').addEventListener('submit', addSite);
+    $('pwdForm').addEventListener('submit', changePwd);
+    $('backupBtn').addEventListener('click', backup);
+    $('restoreBtn').addEventListener('click', restore);
+    $('restoreFile').addEventListener('change', onRestoreFile);
+    $('aiCloseBtn').addEventListener('click', closeAiResult);
+    $('logoutOtherBtn').addEventListener('click', logoutOthers);
+    $('logoutAllBtn').addEventListener('click', logoutAllSessions);
+    $('recRefreshBtn').addEventListener('click', function () { loadRecommendations(true); });
+    $('newsRefreshBtn').addEventListener('click', refreshNewsNow);
+    $('recChips').addEventListener('click', function (e) {
+      var chip = e.target.closest('#recChips .chip');
+      if (!chip) return;
+      REC_STATE.filter = chip.getAttribute('data-rec') || 'all';
+      renderRecommendations();
+    });
+    $('recList').addEventListener('click', function (e) {
+      var auditBtn = e.target.closest('button[data-ai-audit]');
+      if (auditBtn) { aiAuditRec(auditBtn.getAttribute('data-ai-audit')); return; }
+      var applyBtn = e.target.closest('button[data-ai-apply]');
+      if (applyBtn) { aiApplyAdvice(applyBtn.getAttribute('data-id'), applyBtn.getAttribute('data-ai-apply')); return; }
+      var copyBtn = e.target.closest('button[data-ai-copy]');
+      if (copyBtn) { aiCopyAdvice(copyBtn.getAttribute('data-ai-copy')); return; }
+      var btn = e.target.closest('button[data-rec-act]');
+      if (!btn) return;
+      openRecReview(btn.getAttribute('data-id'), btn.getAttribute('data-rec-act'));
+    });
+    var aiAuditAll = $('recAiAuditAllBtn');
+    if (aiAuditAll) aiAuditAll.addEventListener('click', aiAuditPendingBatch);
+    var opsRefresh = $('opsRefreshBtn');
+    if (opsRefresh) opsRefresh.addEventListener('click', function () { loadOpsTopics(); });
+    var opsPage = $('page-ops');
+    if (opsPage) {
+      opsPage.addEventListener('click', function (e) {
+        var chip = e.target.closest('#opsDaysChips .chip');
+        if (chip) {
+          var dv = parseInt(chip.getAttribute('data-ops-days'), 10);
+          if (dv > 0) {
+            OPS_STATE.days = dv;
+            document.querySelectorAll('#opsDaysChips .chip').forEach(function (c) { c.classList.remove('active'); });
+            chip.classList.add('active');
+            loadOpsTopics();
+          }
+          return;
+        }
+        var cm = e.target.closest('button[data-ops-copy-m]');
+        if (cm) {
+          var mi = parseInt(cm.getAttribute('data-ops-copy-m'), 10);
+          var arr = (OPS_STATE.data && OPS_STATE.data.missingAircraft) || [];
+          if (arr[mi]) {
+            try { navigator.clipboard.writeText(arr[mi].term || ''); alert('选题已复制：' + (arr[mi].term || '')); }
+            catch (err) { alert('复制失败，请手动选择文本复制'); }
+          }
+          return;
+        }
+        var cq = e.target.closest('button[data-ops-copy-q]');
+        if (cq) {
+          var qi = parseInt(cq.getAttribute('data-ops-copy-q'), 10);
+          var qarr = (OPS_STATE.data && OPS_STATE.data.unansweredQuestions) || [];
+          if (qarr[qi]) {
+            try { navigator.clipboard.writeText(qarr[qi].question || ''); alert('选题已复制：' + (qarr[qi].question || '')); }
+            catch (err) { alert('复制失败，请手动选择文本复制'); }
+          }
+          return;
+        }
+      });
+    }
+    $('recCancelBtn').addEventListener('click', closeRecReview);
+    $('recForm').addEventListener('submit', submitRecReview);
+    $('clearSessionsBtn').addEventListener('click', clearSessionsWithBackup);
+    $('saveApiBtn').addEventListener('click', saveApiConfig);
+    $('saveSmsBtn').addEventListener('click', saveSmsConfig);
+    var smsSel = $('smsTemplateSelect');
+    if (smsSel) smsSel.addEventListener('change', function () {
+      var cus = $('smsTemplateCustomInput');
+      if (!cus) return;
+      if (this.value === 'custom') cus.classList.remove('hidden');
+      else cus.classList.add('hidden');
+    });
+    var smsSendSel = $('smsSendTemplate');
+    if (smsSendSel) smsSendSel.addEventListener('change', function () {
+      var cus = $('smsSendTemplateCustom');
+      if (!cus) return;
+      if (this.value === 'custom') cus.classList.remove('hidden');
+      else cus.classList.add('hidden');
+    });
+    var smsSendBtn = $('smsSendBtn');
+    if (smsSendBtn) smsSendBtn.addEventListener('click', smsSend);
+    var smsRecTb = $('smsRecTbody');
+    if (smsRecTb) smsRecTb.addEventListener('click', function (e) {
+      var t = e.target;
+      if (!t || !t.getAttribute || !t.getAttribute('data-sms-id')) return;
+      smsSetRecordStatus(t.getAttribute('data-sms-id'), t.getAttribute('data-sms-status'));
+    });
+    var usersTb = $('usersTbody');
+    if (usersTb) usersTb.addEventListener('click', function (e) {
+      var t = e.target;
+      if (!t || !t.getAttribute || !t.getAttribute('data-user-id')) return;
+      var uid = t.getAttribute('data-user-id');
+      if (t.getAttribute('data-user-act') === 'toggle') usersToggleUser(uid);
+      else if (t.getAttribute('data-user-act') === 'remove') removeUser(uid);
+    });
+    var cuBtn = $('cuCreateBtn');
+    if (cuBtn) cuBtn.addEventListener('click', createUser);
+    var tipClose = $('welcomeTipClose');
+    if (tipClose) tipClose.addEventListener('click', hideTipBar);
+    var saveTipBtn = $('saveTipBtn');
+    if (saveTipBtn) saveTipBtn.addEventListener('click', saveTipConfig);
+    var restoreTipBtn = $('restoreTipBtn');
+    if (restoreTipBtn) restoreTipBtn.addEventListener('click', restoreTipBar);
+    initUserControl();
+    var csBtn = $('checkSessionBtn');
+    if (csBtn) csBtn.addEventListener('click', function () { checkAdminSession(); });
+    var ckBtn = $('copyKeyLinkBtn');
+    if (ckBtn) ckBtn.addEventListener('click', copySessionLink);
+    document.querySelectorAll('.nav-item').forEach(function (it) {
+      it.addEventListener('click', function (e) { e.preventDefault(); switchPage(it.getAttribute('data-page')); });
+    });
+    document.querySelectorAll('.modal-mask').forEach(function (mask) {
+      mask.addEventListener('click', function () {
+        mask.parentElement.classList.add('hidden');
+      });
+    });
+  }
+
+  // ===== 启动 =====
+  db = loadDB();
+  applyTheme();
+  bindEvents();
+  consumeUrlSessionKey();
+  initAuth();
+})();
+

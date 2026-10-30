@@ -3595,7 +3595,8 @@ td.check-col { width: 34px; text-align: center; }
     }).finally(function () { MAINT_STATE.loading = false; });
   }
   function renderMaintPage() {
-    var d = MAINT_STATE.data || {};
+    var d = MAINT_STATE.data;
+    if (!d) { loadMaintConfig(); return; }
     var cfg = d.config || {};
     var el;
     el = $('maintEnabledInput'); if (el) el.checked = !!cfg.maintenanceEnabled;
@@ -4771,7 +4772,7 @@ td.check-col { width: 34px; text-align: center; }
   }
   // ===== 敏感面板身份验证（登录密码） =====
   var GATE_KEY = 'aa_gate_ok_v1';
-  var SENSITIVE_PAGES = ['notices', 'trash', 'sites', 'settings'];
+  var SENSITIVE_PAGES = ['notices', 'trash', 'sites'];
   var gateState = { pending: null, ok: false };
   function gateSessionKey() {
     return GATE_KEY + ':' + ((state.session && state.session.sessionId) || 'anon');

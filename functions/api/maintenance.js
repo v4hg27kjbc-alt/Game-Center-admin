@@ -98,13 +98,25 @@ export async function onRequestPost({ request, env }) {
       return fail('super_password_required', '修改维护配置需要超管密码', 403, request);
     }
 
+    const rawConfig = (action === 'save-config' && body.config && typeof body.config === 'object') ? body.config : null;
+    // 后台前端契约使用 maintenanceEnabled，主站契约使用 enabled —— 转发前映射对齐
+    const configForMain = rawConfig ? {
+      enabled: !!rawConfig.maintenanceEnabled,
+      emoji: rawConfig.emoji,
+      assetUrl: rawConfig.assetUrl,
+      message: rawConfig.message,
+      aiGate: !!rawConfig.aiGate,
+      appealUrl: rawConfig.appealUrl,
+      blockReason: rawConfig.blockReason,
+      subMessage: rawConfig.subMessage
+    } : null;
     const payload = {
       action: action,
-      config: action === 'save-config' ? (body.config || null) : undefined,
+      config: configForMain,
       items: action === 'save-blocklist' ? body.items : undefined,
       superPassword: body.superPassword
     };
-    if (action === 'save-config' && (!payload.config || typeof payload.config !== 'object')) {
+    if (action === 'save-config' && !configForMain) {
       return fail('缺少 config 字段', 400, request);
     }
 

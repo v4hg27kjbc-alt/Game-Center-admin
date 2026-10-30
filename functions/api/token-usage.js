@@ -51,7 +51,15 @@ export async function onRequestGet({ request, env }) {
       return fail('主站用量接口暂不可用（' + upstream.status + '）', 502, request);
     }
 
-    const data = payload.data || payload;
+    const data = {
+      usage: payload.usage || {},
+      byDay: payload.byDay || [],
+      byModel: payload.byModel || [],
+      byProvider: payload.byProvider || [],
+      byFeature: payload.byFeature || [],
+      storage: payload.storage || 'unknown',
+      generatedAt: payload.generatedAt || null
+    };
     return json({ ok: true, data: data }, 200, request, { 'Cache-Control': 'no-store' });
   } catch (e) {
     return fail('用量查询失败：' + errText(e), 500, request);

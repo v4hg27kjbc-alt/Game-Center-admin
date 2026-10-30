@@ -917,6 +917,161 @@ body.theme-gold { --body-bg: linear-gradient(160deg, #12100a 0%, #231c10 35%, #3
 body.theme-aurora { --body-bg: linear-gradient(160deg, #061018 0%, #0b2a3a 35%, #0f3d55 65%, #081a26 100%); --body-bg-fallback: #061018; }
 body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, #57203a 65%, #220f18 100%); --body-bg-fallback: #1c0f14; }
 
+/* ==================================================================
+   v69：白底蓝调 Light 主题（默认）+ 顶部 Tab 导航
+   ================================================================== */
+body.theme-light {
+  --body-bg: linear-gradient(160deg, #f4f7fb 0%, #eef3f9 35%, #e9f0f8 65%, #f5f8fc 100%);
+  --body-bg-fallback: #f4f7fb;
+  --card-bg: rgba(255, 255, 255, 0.9);
+  --card-bg-hover: rgba(255, 255, 255, 1);
+  --glass-border: rgba(37, 99, 235, 0.18);
+  --glass-border-hover: rgba(37, 99, 235, 0.4);
+  --glass-shadow: 0 8px 30px rgba(15, 60, 130, 0.1);
+  --accent: #2563eb;
+  --accent-bg: rgba(37, 99, 235, 0.1);
+  --accent-glow: rgba(37, 99, 235, 0.35);
+  --ai-blue: #2563eb;
+  --ai-purple: #4f46e5;
+  --ai-border: rgba(37, 99, 235, 0.35);
+  --text: #24344d;
+  --text-dim: #64748b;
+  --text-heading: #0f2552;
+  --danger: #dc2626;
+  --success: #16a34a;
+  --chip-bg: rgba(37, 99, 235, 0.08);
+  --btn-ghost: rgba(37, 99, 235, 0.06);
+  --btn-ghost-hover: rgba(37, 99, 235, 0.14);
+}
+body.theme-light .login-page {
+  background: linear-gradient(160deg, #eef4fd 0%, #dbe8fb 45%, #d3e2fa 100%);
+}
+body.theme-light .main-page::before {
+  background: radial-gradient(ellipse at 20% 0%, rgba(37, 99, 235, 0.10), transparent 55%),
+              radial-gradient(ellipse at 90% 90%, rgba(79, 70, 229, 0.08), transparent 50%);
+}
+body.theme-light .sidebar,
+body.theme-light .topbar {
+  background: rgba(255, 255, 255, 0.88);
+  color: #24344d;
+}
+body.theme-light .sidebar { border-bottom: 1px solid rgba(37, 99, 235, 0.16); border-right: none; }
+body.theme-light .sidebar-brand { color: #0f2552; }
+body.theme-light .nav-item { color: #3b4a66; }
+body.theme-light .nav-item:hover { background: rgba(37, 99, 235, 0.08); color: #1d4ed8; }
+body.theme-light .nav-item.active {
+  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  border-color: rgba(37, 99, 235, 0.4);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.28);
+}
+body.theme-light .table-card,
+body.theme-light .chart-card,
+body.theme-light .uc-stat-card,
+body.theme-light .token-item,
+body.theme-light .card {
+  background: #ffffff;
+  border-color: rgba(37, 99, 235, 0.16);
+  box-shadow: 0 4px 18px rgba(15, 60, 130, 0.07);
+}
+body.theme-light .uc-stat-num { color: #1d4ed8; }
+body.theme-light .table th { color: #5b6b8c; background: rgba(37, 99, 235, 0.06); }
+body.theme-light .table td { color: #24344d; border-color: rgba(37, 99, 235, 0.1); }
+body.theme-light .table tbody tr:hover { background: rgba(37, 99, 235, 0.05); }
+body.theme-light .input, body.theme-light .select {
+  background: #ffffff;
+  border-color: rgba(37, 99, 235, 0.22);
+  color: #24344d;
+}
+body.theme-light .input:focus, body.theme-light .select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+body.theme-light .btn { color: #24344d; }
+body.theme-light .btn-ghost { background: rgba(37, 99, 235, 0.06); }
+body.theme-light .btn-ghost:hover { background: rgba(37, 99, 235, 0.12); color: #1d4ed8; }
+body.theme-light .list-status { color: #1d4ed8; }
+body.theme-light .list-status.err { color: #dc2626; }
+body.theme-light .sub-note, body.theme-light .settings-note { color: #64748b; }
+body.theme-light .empty { color: #94a3b8; }
+body.theme-light .toolbar-title,
+body.theme-light .chart-card h3 { color: #0f2552; }
+body.theme-light .welcome-tip { background: linear-gradient(135deg, #2563eb, #4f46e5); color: #fff; }
+body.theme-light .welcome-tip-close { color: rgba(255,255,255,.8); }
+body.theme-light .login-card {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(37, 99, 235, 0.2);
+  box-shadow: 0 16px 48px rgba(15, 60, 130, 0.16);
+}
+body.theme-light .login-card h1,
+body.theme-light .login-sub { color: #0f2552; }
+body.theme-light .login-visitor a { color: #1d4ed8; }
+body.theme-light .modal { background: rgba(255, 255, 255, 0.94); }
+body.theme-light .theme-swatch.active { border-color: #2563eb; }
+body.theme-light .nav-dot { background: #f59e0b; }
+
+/* ---- 顶部 Tab 导航（全局） ---- */
+.main-page { display: flex; flex-direction: column; }
+.sidebar {
+  width: 100%;
+  flex-shrink: 0;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 16px;
+  border-right: none;
+  border-bottom: 1px solid var(--glass-border);
+}
+.sidebar-brand { padding: 4px 12px 4px 0; font-size: 14px; }
+.nav { flex-direction: row; flex-wrap: wrap; gap: 4px; padding: 0; }
+.nav-item { padding: 8px 14px; }
+.nav-item.nav-primary-item {
+  font-weight: 700;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(139, 92, 246, 0.18));
+  border-color: rgba(99, 102, 241, 0.3);
+}
+body.theme-light .nav-item.nav-primary-item {
+  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  border-color: rgba(37, 99, 235, 0.4);
+  color: #fff;
+}
+.nav-divider { display: inline-flex; align-items: center; margin: 0 4px; color: var(--text-dim); font-size: 12px; }
+.topbar { border-bottom: 1px solid var(--glass-border); }
+
+/* ---- v69 新增页面 ---- */
+.token-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.token-trend-table { margin-top: 10px; }
+.maint-toggles { display: flex; flex-direction: column; gap: 10px; }
+.maint-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.maint-row label { font-weight: 600; color: var(--text-heading); }
+.switch { position: relative; display: inline-block; width: 46px; height: 24px; flex-shrink: 0; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch .slider {
+  position: absolute; cursor: pointer; inset: 0; border-radius: 24px;
+  background: rgba(148, 163, 184, 0.5); transition: all 0.2s;
+}
+.switch .slider::before {
+  content: ''; position: absolute; height: 18px; width: 18px; left: 3px; top: 3px;
+  background: #fff; border-radius: 50%; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+.switch input:checked + .slider { background: #2563eb; }
+.switch input:checked + .slider::before { transform: translateX(22px); }
+.super-pass-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.emoji-picker { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.emoji-opt {
+  width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 22px; border: 1px solid var(--glass-border); border-radius: 10px; cursor: pointer;
+  background: var(--card-bg); transition: all 0.15s;
+}
+.emoji-opt:hover { border-color: var(--accent); transform: translateY(-1px); }
+.emoji-opt.active { border-color: #2563eb; background: rgba(37,99,235,.12); box-shadow: 0 0 0 2px rgba(37,99,235,.25); }
+.blocklist-area { width: 100%; min-height: 90px; border: 1px solid var(--glass-border); border-radius: 10px; background: var(--card-bg); color: var(--text); padding: 10px; font-family: monospace; font-size: 12px; }
+.batch-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.batch-bar .btn { padding: 4px 12px; font-size: 12px; }
+td.check-col { width: 34px; text-align: center; }
+
+
 /* ===== 令牌 / 访客列表 ===== */
 .token-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
 .token-item {
@@ -1172,13 +1327,16 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     <div class="sidebar-brand">✈ 后台管理</div>
     <nav class="nav">
       <a href="#" class="nav-item active" data-page="dashboard">数据看板</a>
+      <a href="#" class="nav-item nav-primary-item" data-page="sms" data-role="owner,admin">📨 收发</a>
+      <a href="#" class="nav-item nav-primary-item" data-page="token" data-role="owner,admin">Token 用量</a>
+      <a href="#" class="nav-item nav-primary-item" data-page="users" data-role="owner,admin">用户管理</a>
+      <a href="#" class="nav-item nav-primary-item" data-page="maint" data-role="owner,admin">维护控制</a>
+      <span class="nav-divider">更多</span>
       <a href="#" class="nav-item" data-page="feedbacks" data-role="owner,admin">反馈管理</a>
       <a href="#" class="nav-item with-ic" data-page="recommendations" data-role="owner,admin"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.7 5.7 6.3 0.9-4.6 4.4 1.1 6.2L12 17.3 6.5 20.2l1.1-6.2L3 9.6l6.3-0.9L12 3z"/></svg>推荐机型</a>
       <a href="#" class="nav-item" data-page="notices" data-role="owner,admin">公告管理</a>
       <a href="#" class="nav-item with-ic" data-page="usercontrol" data-role="owner,admin"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l2.4 2.4L17 4l.6 2.6L20 9l-1 3 1 3-2.4 2.4L17 20l-2.6-.6L12 22l-2.4-2.4L7 20l-.6-2.6L4 15l1-3-1-3 2.4-2.4L7 4l2.6.6L12 2z"/><path d="M9 12l2 2 4-4"/></svg>航站服务台<span id="ucAppealDot" class="nav-dot hidden"></span></a>
       <a href="#" class="nav-item" data-page="trash" data-role="owner,admin">回收站</a>
-      <a href="#" class="nav-item" data-page="users" data-role="owner,admin">用户管理</a>
-      <a href="#" class="nav-item" data-page="sms" data-role="owner,admin">短信管理</a>
       <a href="#" class="nav-item" data-page="sites" data-role="owner">站点管理</a>
       <a href="#" class="nav-item" data-page="ops" data-role="owner,admin">运营选题</a>
       <a href="#" class="nav-item" data-page="vault" data-role="owner,admin">密钥保险柜</a>
@@ -1588,46 +1746,53 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
         <div class="toolbar">
           <div>
             <div class="toolbar-title">用户管理</div>
-            <p class="sub-note">后台创建用户时手机号为选填项（仅限后台操作，创建记录标记「后台创建」）；列表中的注册用户为前端（用户端）登录产生的记录，只读展示。</p>
+            <p class="sub-note">用户数据由服务端 /api/users 管理（手机号、密码 SHA-256 摘要、注册时间）；可对单个用户执行禁言 / 解封 / 标记违规，也支持勾选多条批量处理。</p>
           </div>
         </div>
         <div id="usersStatus" class="list-status"></div>
 
         <div class="table-card">
-          <div class="toolbar-title" style="font-size:14px">创建用户（手机号选填）</div>
+          <div class="toolbar-title" style="font-size:14px">创建用户（手机号必填）</div>
           <div class="settings-row">
             <input type="text" id="cuUsername" class="input" style="width:170px" placeholder="用户名（必填）" autocomplete="off">
-            <input type="password" id="cuPassword" class="input" style="width:170px" placeholder="密码（必填，至少4位）" autocomplete="new-password">
-            <input type="text" id="cuPhone" class="input" style="width:180px" placeholder="手机号（选填，11位）" autocomplete="off">
+            <input type="password" id="cuPassword" class="input" style="width:170px" placeholder="密码（必填，至少6位）" autocomplete="new-password">
+            <input type="text" id="cuPhone" class="input" style="width:180px" placeholder="手机号（必填，11位）" autocomplete="off">
             <button id="cuCreateBtn" class="btn btn-primary" type="button">创建用户</button>
           </div>
-          <p class="settings-note">说明：手机号选填仅限后台创建时可不填；前端（用户端）注册 / 登录仍必须填写手机号。</p>
+          <p class="settings-note">说明：密码仅以 SHA-256 摘要形式提交服务端，前端与传输层均不落明文。</p>
         </div>
 
         <div class="table-card">
           <div class="toolbar-title" style="font-size:14px">全部用户（<span id="usersCount">0</span>）</div>
+          <div class="batch-bar">
+            <button id="usersRefreshBtn" class="btn btn-ghost" type="button">刷新</button>
+            <button id="usersBatchMuteBtn" class="btn btn-ghost" type="button">批量禁言</button>
+            <button id="usersBatchUnmuteBtn" class="btn btn-ghost" type="button">批量解封</button>
+            <button id="usersBatchFlagBtn" class="btn btn-danger" type="button">批量标记违规</button>
+            <span class="settings-note">勾选列表左侧复选框后执行批量操作；点击表头复选框可全选当前页。</span>
+          </div>
           <table class="table">
-            <thead><tr><th>用户名</th><th>角色</th><th>手机号</th><th>来源</th><th>创建时间</th><th>状态</th><th>操作</th></tr></thead>
+            <thead><tr><th class="check-col"><input type="checkbox" id="usersCheckAll" title="全选当前页"></th><th>用户名</th><th>手机号(脱敏)</th><th>密码摘要</th><th>注册时间</th><th>状态</th><th>操作</th></tr></thead>
             <tbody id="usersTbody"></tbody>
           </table>
           <p id="usersEmpty" class="empty hidden">暂无用户</p>
         </div>
       </section>
 
-      <!-- 短信管理 -->
+      <!-- 收发模块 -->
       <section id="page-sms" class="page hidden">
         <div class="toolbar">
           <div>
-            <div class="toolbar-title">短信管理</div>
-            <p class="sub-note">真实调用 /api/sms-verify 下发短信验证码；发送记录本地持久化（test_sms_records），支持手动更新回执状态。</p>
+            <div class="toolbar-title">收发模块</div>
+            <p class="sub-note">输入手机号调用 /api/sms-verify 下发验证码，成功后返回唯一 BizId 回执编号并展示；支持自动模板 / 自定义模板；每条发送记录可单独开启 / 关闭追踪（开 = 继续追踪回执，关 = 归档）。</p>
           </div>
         </div>
         <div id="smsPageStatus" class="list-status"></div>
 
         <div class="uc-stat-row">
-          <div class="uc-stat-card"><div class="uc-stat-num" id="smsQuotaNum">1000</div><div class="uc-stat-label">剩余短信额度</div></div>
-          <div class="uc-stat-card"><div class="uc-stat-num" id="smsCostNum">0</div><div class="uc-stat-label">本次扣费</div></div>
-          <div class="uc-stat-card"><div class="uc-stat-num" id="smsSentNum">0</div><div class="uc-stat-label">成功发送</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="smsQuotaNum">1000</div><div class="uc-stat-label">当前可用余额（条）</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="smsCostNum">0</div><div class="uc-stat-label">本次扣费金额（条）</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="smsSentNum">0</div><div class="uc-stat-label">剩余可发送次数</div></div>
         </div>
 
         <div class="table-card">
@@ -1635,19 +1800,19 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
           <div class="settings-row">
             <input type="text" id="smsPhoneInput" class="input" style="width:190px" placeholder="手机号（11位）" autocomplete="off">
             <select id="smsSendTemplate" class="input" style="width:230px">
-              <option value="100001">100001 · 默认验证码模板</option>
+              <option value="100001">100001 · 默认验证码模板（自动）</option>
               <option value="custom">自定义模板（请输入模板 Code）</option>
             </select>
             <input type="text" id="smsSendTemplateCustom" class="input hidden" style="width:180px" placeholder="阿里云短信模板 Code，如 100002" autocomplete="off">
             <button id="smsSendBtn" class="btn btn-primary" type="button">发送短信</button>
           </div>
-          <p class="settings-note">说明：每次成功发送扣减 1 条额度（初始额度可在系统设置配置，默认 1000）；被限流或失败不扣减。同手机号 60 秒内限 1 条。</p>
+          <p class="settings-note">说明：每次成功发送扣减 1 条额度（初始额度可在系统设置配置，默认 1000）；被限流或失败不扣减。同手机号 60 秒内限 1 条。发送成功后将返回唯一 BizId 回执编号。</p>
         </div>
 
         <div class="table-card">
           <div class="toolbar-title" style="font-size:14px">发送记录（<span id="smsRecCount">0</span>）</div>
           <table class="table">
-            <thead><tr><th>发送时间</th><th>手机号(脱敏)</th><th>模板</th><th>BizId</th><th>状态</th><th>操作</th></tr></thead>
+            <thead><tr><th>发送时间</th><th>手机号(脱敏)</th><th>模板</th><th>BizId 回执</th><th>状态</th><th>追踪</th></tr></thead>
             <tbody id="smsRecTbody"></tbody>
           </table>
           <p id="smsRecEmpty" class="empty hidden">暂无发送记录</p>
@@ -1695,6 +1860,89 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
             <tbody id="vaultBody"></tbody>
           </table>
           <div id="vaultEmpty" class="empty">保险柜空空如也，先添加一条记录吧</div>
+      <!-- Token 用量 -->
+      <section id="page-token" class="page hidden">
+        <div class="toolbar">
+          <div>
+            <div class="toolbar-title">Token 用量</div>
+            <p class="sub-note">接入 Kimi API 用量统计看板：总消耗、近 N 日趋势；数据来自主站 /api/admin/stats（AI 代理累计）。</p>
+          </div>
+        </div>
+        <div id="tokenStatus" class="list-status"></div>
+        <div class="toolbar">
+          <div class="settings-row">
+            <button id="tokenRefreshBtn" class="btn btn-primary" type="button">刷新用量</button>
+            <button id="tokenKimiBtn" class="btn btn-ghost" type="button">🚀 一键进入 Kimi 知识库问答</button>
+          </div>
+          <span class="settings-note">一键直达 Kimi 快捷入口，进入知识库问答区操作。</span>
+        </div>
+        <div class="token-stat-grid">
+          <div class="uc-stat-card"><div class="uc-stat-num" id="tokTotalCalls">—</div><div class="uc-stat-label">总调用次数</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="tokTotalTokens">—</div><div class="uc-stat-label">总 Token 消耗</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="tokCostYuan">—</div><div class="uc-stat-label">累计费用（元）</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="tokAvgTokens">—</div><div class="uc-stat-label">平均单次 Token</div></div>
+        </div>
+        <div class="table-card">
+          <div class="toolbar-title" style="font-size:14px">近 N 日趋势（默认近 7 日）</div>
+          <table class="table token-trend-table">
+            <thead><tr><th>日期</th><th>调用次数</th><th>Token 消耗</th><th>费用（元）</th></tr></thead>
+            <tbody id="tokenTrendTbody"></tbody>
+          </table>
+          <p id="tokenTrendEmpty" class="empty hidden">暂无趋势数据</p>
+        </div>
+      </section>
+
+      <!-- 维护控制 -->
+      <section id="page-maint" class="page hidden">
+        <div class="toolbar">
+          <div>
+            <div class="toolbar-title">维护控制</div>
+            <p class="sub-note">维护模式开关与主站 /api/maintenance 联动：开启后主站全屏毛玻璃遮罩；可自定义中心 Emoji / 动图与文案；黑名单手机号在维护期间自动拒绝服务。修改前需验证超管密码。</p>
+          </div>
+        </div>
+        <div id="maintStatus" class="list-status"></div>
+
+        <div class="table-card">
+          <div class="toolbar-title" style="font-size:14px">维护模式总开关</div>
+          <div class="maint-toggles">
+            <div class="maint-row">
+              <label class="switch"><input type="checkbox" id="maintEnabledInput"><span class="slider"></span></label>
+              <span>开启维护模式（主站显示毛玻璃遮罩，全站不可交互）</span>
+            </div>
+            <div class="maint-row">
+              <label class="switch"><input type="checkbox" id="maintAiGateInput"><span class="slider"></span></label>
+              <span>AI 门控（未解锁访客 AI 问答灰置不可用）</span>
+            </div>
+          </div>
+          <div class="settings-row" style="margin-top:10px">
+            <input type="text" id="maintMessageInput" class="input" style="width:320px" placeholder="维护文案（默认：站点维护中，请稍后再来）" autocomplete="off">
+            <input type="text" id="maintAssetInput" class="input" style="width:260px" placeholder="中心 Emoji 或动图 URL（如 🛠 或 https://…gif）" autocomplete="off">
+          </div>
+          <p class="settings-note">中心元素：默认 🛠；可选常用 Emoji / GIF 动图。</p>
+          <div class="emoji-picker" id="maintEmojiPicker">
+            <span class="emoji-opt" data-emoji="🛠">🛠</span>
+            <span class="emoji-opt" data-emoji="🚧">🚧</span>
+            <span class="emoji-opt" data-emoji="⏳">⏳</span>
+            <span class="emoji-opt" data-emoji="🔧">🔧</span>
+            <span class="emoji-opt" data-emoji="☕">☕</span>
+            <span class="emoji-opt" data-emoji="🌙">🌙</span>
+            <span class="emoji-opt" data-emoji="✈️">✈️</span>
+          </div>
+          <div class="super-pass-row">
+            <input type="password" id="maintSuperPass" class="input" style="width:220px" placeholder="超管密码（环境变量 SUPER_ADMIN_PASSWORD）" autocomplete="new-password">
+            <button id="maintSaveBtn" class="btn btn-primary" type="button">保存维护配置</button>
+            <button id="maintLoadBtn" class="btn btn-ghost" type="button">刷新状态</button>
+          </div>
+          <p class="settings-note">超管密码由服务端校验（环境变量 SUPER_ADMIN_PASSWORD），前端不落明文；未配置时服务端将拒绝修改并提示。</p>
+        </div>
+
+        <div class="table-card">
+          <div class="toolbar-title" style="font-size:14px">黑名单推送（维护期间自动拒绝服务）</div>
+          <p class="settings-note">每行一个手机号（11 位）；保存后主站维护接口将把这些号码标记为 blocked 状态。</p>
+          <textarea id="maintBlocklistInput" class="blocklist-area" placeholder="13800000000&#10;13900000000"></textarea>
+          <div class="super-pass-row">
+            <button id="maintBlockSaveBtn" class="btn btn-danger" type="button">保存黑名单（需超管密码）</button>
+          </div>
         </div>
       </section>
 
@@ -2160,25 +2408,28 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   function switchPage(name) {
     // 敏感面板前置身份验证（登录密码）
     if (typeof requireGate === 'function' && !requireGate(name)) return;
-    var pages = ['dashboard', 'feedbacks', 'recommendations', 'ops', 'notices', 'usercontrol', 'trash', 'users', 'sms', 'vault', 'sites', 'settings'];
+    var pages = ['dashboard', 'sms', 'token', 'users', 'maint', 'feedbacks', 'recommendations', 'ops', 'notices', 'usercontrol', 'trash', 'vault', 'sites', 'settings'];
     for (var i = 0; i < pages.length; i++) {
-      $('page-' + pages[i]).classList.toggle('hidden', pages[i] !== name);
+      var pg = $('page-' + pages[i]);
+      if (pg) pg.classList.toggle('hidden', pages[i] !== name);
     }
     var navs = document.querySelectorAll('.nav-item');
     for (var j = 0; j < navs.length; j++) {
       navs[j].classList.toggle('active', navs[j].getAttribute('data-page') === name);
     }
-    var titles = { dashboard: '数据看板', feedbacks: '反馈管理', recommendations: '推荐机型', ops: '运营选题', notices: '公告管理', usercontrol: '航站服务台', trash: '回收站', users: '用户管理', sms: '短信管理', vault: '密钥保险柜', sites: '站点管理', settings: '系统设置' };
+    var titles = { dashboard: '数据看板', sms: '收发模块', token: 'Token 用量', users: '用户管理', maint: '维护控制', feedbacks: '反馈管理', recommendations: '推荐机型', ops: '运营选题', notices: '公告管理', usercontrol: '航站服务台', trash: '回收站', vault: '密钥保险柜', sites: '站点管理', settings: '系统设置' };
     $('pageTitle').textContent = titles[name] || '';
     if (name === 'dashboard') { loadStats(); renderTrend(); renderRecent(); renderNotes(); refreshLivePanels(); }
+    if (name === 'sms') renderSmsPage();
+    if (name === 'token') renderTokenPage();
+    if (name === 'users') renderUsersPage();
+    if (name === 'maint') renderMaintPage();
     if (name === 'feedbacks') loadFeedbacks();
     if (name === 'recommendations') loadRecommendations(false);
     if (name === 'ops') loadOpsTopics();
     if (name === 'notices') loadAnnouncements(false);
     if (name === 'usercontrol') loadUserControl();
     if (name === 'trash') renderTrash();
-    if (name === 'users') renderUsersPage();
-    if (name === 'sms') renderSmsPage();
     if (name === 'sites') renderSites();
     if (name === 'vault') renderVault();
     if (name === 'settings') renderSettings();
@@ -3174,12 +3425,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   function renderSmsQuota() {
     var el = $('smsQuotaNum'); if (el) el.textContent = smsQuota();
     var cost = $('smsCostNum'); if (cost) cost.textContent = (db.settings.smsLastCost || 0);
-    var recs = smsRecords();
-    var sent = 0;
-    for (var i = 0; i < recs.length; i++) {
-      if (recs[i].status === '成功' || recs[i].status === '已回执' || recs[i].status === '已发送') sent++;
-    }
-    var s2 = $('smsSentNum'); if (s2) s2.textContent = sent;
+    var s2 = $('smsSentNum'); if (s2) s2.textContent = smsQuota();
   }
   function renderSmsPage() {
     renderSmsQuota();
@@ -3199,27 +3445,24 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
       var c3 = document.createElement('td'); c3.textContent = r.templateCode || '';
       var c4 = document.createElement('td'); c4.textContent = r.bizId || '—'; c4.style.fontFamily = 'monospace';
       var c5 = document.createElement('td'); c5.textContent = r.status || '已发送';
-      c5.style.color = (r.status === '成功' || r.status === '已回执') ? '#7ee0a3' : (r.status === '失败' ? '#ff9d6c' : '#e8c87e');
+      c5.style.color = (r.status === '成功' || r.status === '已回执') ? '#16a34a' : (r.status === '失败' ? '#dc2626' : '#d97706');
       var c6 = document.createElement('td');
-      ['发送成功', '发送失败', '已回执'].forEach(function (st) {
-        var b = document.createElement('button');
-        b.className = 'btn btn-ghost';
-        b.style.padding = '2px 8px'; b.style.fontSize = '12px'; b.style.marginRight = '4px';
-        b.textContent = st;
-        b.setAttribute('data-sms-id', r.id);
-        b.setAttribute('data-sms-status', st);
-        if (r.status === st) { b.disabled = true; b.style.opacity = '0.5'; }
-        c6.appendChild(b);
-      });
+      var tb = document.createElement('button');
+      tb.className = 'btn btn-ghost';
+      tb.style.padding = '2px 8px'; tb.style.fontSize = '12px';
+      tb.textContent = r.tracking === false ? '已归档 · 开启追踪' : '追踪中 · 关闭追踪';
+      tb.setAttribute('data-sms-id', r.id);
+      tb.setAttribute('data-sms-tracking', r.tracking === false ? 'on' : 'off');
+      c6.appendChild(tb);
       tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c3); tr.appendChild(c4); tr.appendChild(c5); tr.appendChild(c6);
       tbody.appendChild(tr);
     });
   }
-  function smsSetRecordStatus(id, status) {
+  function smsToggleTracking(id) {
     var arr = smsRecords();
     var hit = false;
     for (var i = 0; i < arr.length; i++) {
-      if (arr[i].id === id) { arr[i].status = status; hit = true; break; }
+      if (arr[i].id === id) { arr[i].tracking = (arr[i].tracking === false) ? true : false; hit = true; break; }
     }
     if (!hit) return;
     saveSmsRecords(arr);
@@ -3266,87 +3509,285 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     });
   }
 
-  // ===== 用户管理 =====
-  function userRoleText(r) {
-    if (r === 'owner') return '主管理员';
-    if (r === 'admin') return '管理员';
-    if (r === 'guest') return '参观';
-    return '用户';
+  // ===== Token 用量（v69） =====
+  var TOKEN_STATE = { loading: false, data: null, error: '' };
+  function tokStatus(msg, isErr) {
+    var el = $('tokenStatus');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.className = isErr ? 'list-status err' : 'list-status';
   }
-  function userSourceText(u) {
-    if (u && u.source) return u.source;
-    return (u && u.role === 'owner') ? '内置' : '注册';
+  function loadTokenUsage() {
+    if (TOKEN_STATE.loading) return;
+    TOKEN_STATE.loading = true;
+    tokStatus('正在拉取 Token 用量…');
+    recRequest('/api/token-usage?days=7', { method: 'GET' }).then(function (data) {
+      TOKEN_STATE.data = data || null;
+      TOKEN_STATE.error = '';
+      tokStatus('用量已更新');
+      renderTokenPage();
+    }).catch(function (err) {
+      TOKEN_STATE.error = (err && err.message) ? err.message : '未知错误';
+      tokStatus('Token 用量拉取失败：' + TOKEN_STATE.error, true);
+    }).finally(function () { TOKEN_STATE.loading = false; });
   }
+  function renderTokenPage() {
+    var d = TOKEN_STATE.data;
+    if (!d) { loadTokenUsage(); return; }
+    var dd = (d && d.data && typeof d.data === 'object') ? d.data : d;
+    var usage = dd.usage || {};
+    var el;
+    el = $('tokTotalCalls'); if (el) el.textContent = (usage.calls != null) ? usage.calls : '—';
+    el = $('tokTotalTokens'); if (el) el.textContent = (usage.totalTokens != null) ? usage.totalTokens : '—';
+    el = $('tokCostYuan'); if (el) el.textContent = (usage.costYuan != null) ? Number(usage.costYuan).toFixed(2) : '—';
+    var avg = (usage.calls && usage.totalTokens) ? Math.round(usage.totalTokens / usage.calls) : '—';
+    el = $('tokAvgTokens'); if (el) el.textContent = avg;
+    var byDay = (dd.byDay && Array.isArray(dd.byDay)) ? dd.byDay : [];
+    var tbody = $('tokenTrendTbody');
+    var empty = $('tokenTrendEmpty');
+    if (tbody) {
+      tbody.innerHTML = '';
+      byDay.slice().sort(function (a, b) { return String(a.date || '').localeCompare(String(b.date || '')); }).forEach(function (r) {
+        var tr = document.createElement('tr');
+        var c1 = document.createElement('td'); c1.textContent = r.date || '';
+        var c2 = document.createElement('td'); c2.textContent = (r.calls != null) ? r.calls : 0;
+        var c3 = document.createElement('td'); c3.textContent = (r.totalTokens != null) ? r.totalTokens : 0;
+        var c4 = document.createElement('td'); c4.textContent = (r.costYuan != null) ? Number(r.costYuan).toFixed(2) : '0.00';
+        tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c3); tr.appendChild(c4);
+        tbody.appendChild(tr);
+      });
+    }
+    if (empty) empty.classList.toggle('hidden', byDay.length > 0);
+  }
+  function openKimiQuickEntry() {
+    try { window.open('https://kimi.moonshot.cn/', '_blank'); } catch (e) {}
+    tokStatus('已打开 Kimi 快捷入口（知识库问答区）');
+  }
+
+  // ===== 维护控制（v69） =====
+  var MAINT_STATE = { loading: false, data: null, error: '' };
+  function maintStatus(msg, isErr) {
+    var el = $('maintStatus');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.className = isErr ? 'list-status err' : 'list-status';
+  }
+  function renderMaintEmojiPicker(active) {
+    var wrap = $('maintEmojiPicker');
+    if (!wrap) return;
+    var items = wrap.querySelectorAll('.emoji-opt');
+    for (var i = 0; i < items.length; i++) {
+      items[i].classList.toggle('active', items[i].getAttribute('data-emoji') === active);
+    }
+  }
+  function loadMaintConfig() {
+    if (MAINT_STATE.loading) return;
+    MAINT_STATE.loading = true;
+    maintStatus('正在读取主站维护状态…');
+    recRequest('/api/maintenance', { method: 'GET' }).then(function (data) {
+      MAINT_STATE.data = data || null;
+      MAINT_STATE.error = '';
+      maintStatus('维护状态已同步');
+      renderMaintPage();
+    }).catch(function (err) {
+      MAINT_STATE.error = (err && err.message) ? err.message : '未知错误';
+      maintStatus('维护状态读取失败：' + MAINT_STATE.error, true);
+    }).finally(function () { MAINT_STATE.loading = false; });
+  }
+  function renderMaintPage() {
+    var d = MAINT_STATE.data || {};
+    var cfg = d.config || {};
+    var el;
+    el = $('maintEnabledInput'); if (el) el.checked = !!cfg.maintenanceEnabled;
+    el = $('maintAiGateInput'); if (el) el.checked = !!cfg.aiGate;
+    el = $('maintMessageInput'); if (el) el.value = cfg.message || '';
+    el = $('maintAssetInput'); if (el) el.value = cfg.assetUrl || '';
+    var emoji = (cfg.assetUrl && String(cfg.assetUrl).indexOf('http') !== 0) ? String(cfg.assetUrl) : '';
+    renderMaintEmojiPicker(emoji);
+    var bl = (cfg.blocklist && Array.isArray(cfg.blocklist)) ? cfg.blocklist : [];
+    el = $('maintBlocklistInput'); if (el) el.value = bl.join('\n');
+  }
+  function maintSelectedEmoji() {
+    var wrap = $('maintEmojiPicker');
+    if (!wrap) return '';
+    var act = wrap.querySelector('.emoji-opt.active');
+    return act ? act.getAttribute('data-emoji') : '';
+  }
+  function maintBuildPayload() {
+    var msg = $('maintMessageInput');
+    var asset = $('maintAssetInput');
+    var manualAsset = asset ? asset.value.trim() : '';
+    var emoji = maintSelectedEmoji();
+    var assetUrl = manualAsset || emoji || '🛠';
+    return {
+      maintenanceEnabled: !!($('maintEnabledInput') && $('maintEnabledInput').checked),
+      aiGate: !!($('maintAiGateInput') && $('maintAiGateInput').checked),
+      message: msg ? msg.value.trim() : '站点维护中，请稍后再来',
+      assetUrl: assetUrl
+    };
+  }
+  function saveMaintConfig() {
+    var pass = $('maintSuperPass') ? $('maintSuperPass').value : '';
+    if (!pass) { maintStatus('请先输入超管密码', true); return; }
+    maintStatus('正在保存维护配置…');
+    recRequest('/api/maintenance', { method: 'POST', body: { action: 'save-config', superPassword: pass, config: maintBuildPayload() } }).then(function (data) {
+      maintStatus((data && data.message) ? data.message : '维护配置已保存');
+      if ($('maintSuperPass')) $('maintSuperPass').value = '';
+      loadMaintConfig();
+    }).catch(function (err) {
+      maintStatus('保存失败：' + ((err && err.message) ? err.message : '未知错误'), true);
+    });
+  }
+  function saveMaintBlocklist() {
+    var pass = $('maintSuperPass') ? $('maintSuperPass').value : '';
+    if (!pass) { maintStatus('请先输入超管密码', true); return; }
+    var ta = $('maintBlocklistInput');
+    var lines = ta ? ta.value.split('\n') : [];
+    var blocklist = [];
+    for (var i = 0; i < lines.length; i++) {
+      var p = lines[i].trim();
+      if (p) blocklist.push(p);
+    }
+    maintStatus('正在保存黑名单…');
+    recRequest('/api/maintenance', { method: 'POST', body: { action: 'save-blocklist', superPassword: pass, items: blocklist } }).then(function (data) {
+      maintStatus((data && data.message) ? data.message : '黑名单已保存');
+      if ($('maintSuperPass')) $('maintSuperPass').value = '';
+      loadMaintConfig();
+    }).catch(function (err) {
+      maintStatus('保存失败：' + ((err && err.message) ? err.message : '未知错误'), true);
+    });
+  }
+
+  // ===== 用户管理（v69 服务端 /api/users） =====
+  function sha256Hex(str) {
+    if (window.crypto && crypto.subtle && crypto.subtle.digest) {
+      return crypto.subtle.digest('SHA-256', new TextEncoder().encode(str)).then(function (buf) {
+        var bytes = new Uint8Array(buf);
+        var hex = '';
+        for (var i = 0; i < bytes.length; i++) hex += ('0' + bytes[i].toString(16)).slice(-2);
+        return hex;
+      });
+    }
+    return Promise.resolve('');
+  }
+  function usersStatus(msg, isErr) {
+    var el = $('usersStatus');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.className = isErr ? 'list-status err' : 'list-status';
+  }
+  var USERS_STATE = { loading: false, data: [], error: '' };
   function renderUsersPage() {
+    loadUsers();
+  }
+  function loadUsers() {
+    if (USERS_STATE.loading) return;
+    USERS_STATE.loading = true;
+    usersStatus('正在加载用户列表…');
+    recRequest('/api/users', { method: 'GET' }).then(function (data) {
+      var dd = (data && data.data && typeof data.data === 'object') ? data.data : data;
+      var arr = (dd && (dd.users || dd.list || dd.items)) ? (dd.users || dd.list || dd.items) : [];
+      USERS_STATE.data = Array.isArray(arr) ? arr : [];
+      USERS_STATE.error = '';
+      usersStatus('用户列表已加载（' + USERS_STATE.data.length + ' 人）');
+      renderUsersTable();
+    }).catch(function (err) {
+      USERS_STATE.error = (err && err.message) ? err.message : '未知错误';
+      usersStatus('用户列表加载失败：' + USERS_STATE.error, true);
+      renderUsersTable();
+    }).finally(function () { USERS_STATE.loading = false; });
+  }
+  function renderUsersTable() {
     var tbody = $('usersTbody');
     if (!tbody) return;
-    var arr = (db.users || []).slice().sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); });
+    var arr = USERS_STATE.data.slice().sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); });
     tbody.innerHTML = '';
     var empty = $('usersEmpty'); if (empty) empty.classList.toggle('hidden', arr.length > 0);
     var cnt = $('usersCount'); if (cnt) cnt.textContent = arr.length;
     arr.forEach(function (u) {
       var tr = document.createElement('tr');
-      var c1 = document.createElement('td'); c1.textContent = u.username;
-      var c2 = document.createElement('td'); c2.textContent = userRoleText(u.role);
-      var c3 = document.createElement('td'); c3.textContent = (u.phone && String(u.phone).trim()) ? smsMaskPhone(u.phone) : '未填写';
-      var c4 = document.createElement('td'); c4.textContent = userSourceText(u);
-      var c5 = document.createElement('td'); c5.textContent = u.createdAt || '';
+      var st = u.status || 'active';
+      var c0 = document.createElement('td'); c0.className = 'check-col';
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'user-check'; cb.setAttribute('data-user-check', u.id || u.username || u.phone || '');
+      c0.appendChild(cb);
+      var c1 = document.createElement('td'); c1.textContent = u.username || '—';
+      var c2 = document.createElement('td'); c2.textContent = smsMaskPhone(u.phone);
+      var c3 = document.createElement('td');
+      var ph = (u.passwordHash || u.password || '').toString();
+      c3.textContent = ph ? ph.slice(0, 12) + '…' : '—'; c3.style.fontFamily = 'monospace'; c3.title = ph;
+      var c4 = document.createElement('td'); c4.textContent = u.createdAt || '';
+      var c5 = document.createElement('td');
+      var flags = [];
+      if (st === 'muted') flags.push('禁言');
+      if (st === 'flagged') flags.push('违规');
+      if (st === 'banned') flags.push('封锁');
+      c5.textContent = flags.length ? flags.join(' / ') : '正常';
+      c5.style.color = flags.length ? '#dc2626' : '#16a34a';
       var c6 = document.createElement('td');
-      c6.textContent = u.enabled === false ? '已停用' : '正常';
-      c6.style.color = u.enabled === false ? '#ff9d6c' : '#7ee0a3';
-      var c7 = document.createElement('td');
-      if (u.role !== 'owner') {
-        var b1 = document.createElement('button');
-        b1.className = 'btn btn-ghost'; b1.style.padding = '2px 8px'; b1.style.fontSize = '12px';
-        b1.textContent = u.enabled === false ? '启用' : '停用';
-        b1.setAttribute('data-user-id', u.username);
-        b1.setAttribute('data-user-act', 'toggle');
-        c7.appendChild(b1);
-        var b2 = document.createElement('button');
-        b2.className = 'btn btn-danger'; b2.style.padding = '2px 8px'; b2.style.fontSize = '12px'; b2.style.marginLeft = '4px';
-        b2.textContent = '删除';
-        b2.setAttribute('data-user-id', u.username);
-        b2.setAttribute('data-user-act', 'remove');
-        c7.appendChild(b2);
-      } else {
-        c7.textContent = '—';
+      var acts = [
+        { act: st === 'muted' ? 'unmute' : 'mute', label: st === 'muted' ? '解封' : '禁言' },
+        { act: 'flag', label: st === 'flagged' ? '再标记违规' : '标记违规' },
+        { act: (st === 'banned' || st === 'flagged') ? 'unban' : 'ban', label: (st === 'banned' || st === 'flagged') ? '解除封锁' : '封锁' }
+      ];
+      for (var k = 0; k < acts.length; k++) {
+        var b = document.createElement('button');
+        b.className = 'btn btn-ghost'; b.style.padding = '2px 8px'; b.style.fontSize = '12px'; b.style.marginRight = '4px';
+        b.textContent = acts[k].label;
+        b.setAttribute('data-user-id', u.id || u.username || u.phone || '');
+        b.setAttribute('data-user-act', acts[k].act);
+        c6.appendChild(b);
       }
-      tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c3); tr.appendChild(c4); tr.appendChild(c5); tr.appendChild(c6); tr.appendChild(c7);
+      tr.appendChild(c0); tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c3); tr.appendChild(c4); tr.appendChild(c5); tr.appendChild(c6);
       tbody.appendChild(tr);
     });
   }
+  function selectedUserIds() {
+    var ids = [];
+    var cbs = document.querySelectorAll('#usersTbody .user-check:checked');
+    for (var i = 0; i < cbs.length; i++) ids.push(cbs[i].getAttribute('data-user-check'));
+    return ids;
+  }
+  function usersBatchAction(action) {
+    var ids = selectedUserIds();
+    if (!ids.length) { usersStatus('请先勾选要处理的用户', true); return; }
+    if (action === 'flag' && !confirm('确认对 ' + ids.length + ' 个用户标记违规？')) return;
+    var opName = { mute: '禁言', unmute: '解封', flag: '标记违规' }[action] || action;
+    recRequest('/api/users', { method: 'POST', body: { action: 'batch', op: action, ids: ids } }).then(function (data) {
+      usersStatus((data && data.message) ? data.message : ('已批量' + opName));
+      loadUsers();
+    }).catch(function (err) {
+      usersStatus('批量操作失败：' + ((err && err.message) ? err.message : '未知错误'), true);
+    });
+  }
+  function usersSingleAction(id, action) {
+    if (action === 'flag' && !confirm('确认将用户「' + id + '」标记违规？')) return;
+    recRequest('/api/users', { method: 'POST', body: { action: 'single', id: id, op: action } }).then(function (data) {
+      usersStatus((data && data.message) ? data.message : ('操作成功：' + id));
+      loadUsers();
+    }).catch(function (err) {
+      usersStatus('操作失败：' + ((err && err.message) ? err.message : '未知错误'), true);
+    });
+  }
   function createUser() {
-    var st = $('usersStatus');
     var name = $('cuUsername').value.trim();
     var pwd = $('cuPassword').value;
     var phone = $('cuPhone').value.trim();
-    if (!name) { if (st) { st.textContent = '请输入用户名'; st.className = 'list-status err'; } return; }
-    if (pwd.length < 4) { if (st) { st.textContent = '密码至少 4 位'; st.className = 'list-status err'; } return; }
-    if (phone && !/^1[3-9]\d{9}$/.test(phone)) { if (st) { st.textContent = '手机号格式不正确（选填，如填写需为 11 位大陆手机号）'; st.className = 'list-status err'; } return; }
-    if (findUser(name)) { if (st) { st.textContent = '用户名已存在'; st.className = 'list-status err'; } return; }
-    db.users.push({ username: name, password: pwd, role: 'admin', phone: phone, source: '后台创建', createdAt: nowStr(), enabled: true });
-    saveDB();
-    $('cuUsername').value = ''; $('cuPassword').value = ''; $('cuPhone').value = '';
-    renderUsersPage();
-    if (st) { st.textContent = '已创建用户：' + name + '（来源：后台创建' + (phone ? '，手机号已填写' : '，未填手机号') + '）'; st.className = 'list-status'; }
-  }
-  function usersToggleUser(name) {
-    var u = findUser(name);
-    if (!u) return;
-    if (u.role === 'owner') { alert('主管理员账号不能停用'); return; }
-    u.enabled = u.enabled === false ? true : false;
-    saveDB();
-    renderUsersPage();
-  }
-  function removeUser(name) {
-    var u = findUser(name);
-    if (!u) return;
-    if (u.role === 'owner') { alert('主管理员账号不能删除'); return; }
-    if (state.session && state.session.username === u.username) { alert('不能删除当前登录账号'); return; }
-    if (!confirm('确认删除用户「' + name + '」？此操作不可撤销。')) return;
-    db.users = db.users.filter(function (x) { return x.username !== name; });
-    saveDB();
-    renderUsersPage();
+    if (!name) { usersStatus('请输入用户名', true); return; }
+    if (pwd.length < 6) { usersStatus('密码至少 6 位', true); return; }
+    if (!/^1[3-9]\d{9}$/.test(phone)) { usersStatus('手机号必填且需为 11 位大陆手机号', true); return; }
+    usersStatus('正在计算密码摘要并创建…');
+    sha256Hex(pwd).then(function (hash) {
+      if (!hash) { usersStatus('当前环境不支持 SHA-256，创建已中止', true); return; }
+      return recRequest('/api/users', { method: 'POST', body: { username: name, passwordHash: hash, phone: phone } });
+    }).then(function (data) {
+      usersStatus((data && data.message) ? data.message : ('已创建用户：' + name));
+      if ($('cuUsername')) $('cuUsername').value = '';
+      if ($('cuPassword')) $('cuPassword').value = '';
+      if ($('cuPhone')) $('cuPhone').value = '';
+      loadUsers();
+    }).catch(function (err) {
+      usersStatus('创建失败：' + ((err && err.message) ? err.message : '未知错误'), true);
+    });
   }
 
   // ===== 蓝色提示条 =====
@@ -5081,7 +5522,7 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
 
   // ===== 个性化主题 =====
   var THEMES = [
-    { id: 'light', name: '纯净白', css: '#f5f7fa' },
+    { id: 'light', name: '纯净白 · 蓝调', css: 'linear-gradient(160deg,#f4f7fb 0%,#eef3f9 50%,#e9f0f8 100%)' },
     { id: 'default', name: '深邃星空', css: 'linear-gradient(160deg,#0b1220 0%,#0f1c33 40%,#101d3a 100%)' },
     { id: 'gold', name: '鎏金复古', css: 'linear-gradient(160deg,#12100a 0%,#231c10 35%,#3a2d16 65%,#181206 100%)' },
     { id: 'aurora', name: '极光幻境', css: 'linear-gradient(160deg,#061018 0%,#0b2a3a 35%,#0f3d55 65%,#081a26 100%)' },
@@ -5089,9 +5530,9 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
   ];
   function applyTheme() {
     var t = db.theme || 'light';
-    document.body.classList.remove('theme-gold', 'theme-aurora', 'theme-sunset');
-    document.body.classList.toggle('theme-light', t === 'light');
-    if (t !== 'light' && t !== 'default') document.body.classList.add('theme-' + t);
+    document.body.classList.remove('theme-gold', 'theme-aurora', 'theme-sunset', 'theme-light');
+    if (t === 'light') document.body.classList.add('theme-light');
+    else if (t !== 'default') document.body.classList.add('theme-' + t);
   }
   function toggleThemeQuick() {
     db.theme = (db.theme === 'light') ? 'default' : 'light';
@@ -5570,18 +6011,52 @@ body.theme-sunset { --body-bg: linear-gradient(160deg, #1c0f14 0%, #3a1626 35%, 
     if (smsRecTb) smsRecTb.addEventListener('click', function (e) {
       var t = e.target;
       if (!t || !t.getAttribute || !t.getAttribute('data-sms-id')) return;
-      smsSetRecordStatus(t.getAttribute('data-sms-id'), t.getAttribute('data-sms-status'));
+      if (t.getAttribute('data-sms-tracking')) smsToggleTracking(t.getAttribute('data-sms-id'));
     });
     var usersTb = $('usersTbody');
     if (usersTb) usersTb.addEventListener('click', function (e) {
       var t = e.target;
       if (!t || !t.getAttribute || !t.getAttribute('data-user-id')) return;
       var uid = t.getAttribute('data-user-id');
-      if (t.getAttribute('data-user-act') === 'toggle') usersToggleUser(uid);
-      else if (t.getAttribute('data-user-act') === 'remove') removeUser(uid);
+      var act = t.getAttribute('data-user-act');
+      if (act) usersSingleAction(uid, act);
     });
     var cuBtn = $('cuCreateBtn');
     if (cuBtn) cuBtn.addEventListener('click', createUser);
+    var usersRefresh = $('usersRefreshBtn');
+    if (usersRefresh) usersRefresh.addEventListener('click', loadUsers);
+    var usersCheckAll = $('usersCheckAll');
+    if (usersCheckAll) usersCheckAll.addEventListener('change', function () {
+      var cbs = document.querySelectorAll('#usersTbody .user-check');
+      for (var i = 0; i < cbs.length; i++) cbs[i].checked = !!usersCheckAll.checked;
+    });
+    var ub1 = $('usersBatchMuteBtn'); if (ub1) ub1.addEventListener('click', function () { usersBatchAction('mute'); });
+    var ub2 = $('usersBatchUnmuteBtn'); if (ub2) ub2.addEventListener('click', function () { usersBatchAction('unmute'); });
+    var ub3 = $('usersBatchFlagBtn'); if (ub3) ub3.addEventListener('click', function () { usersBatchAction('flag'); });
+    var themeToggle = $('themeToggleBtn');
+    if (themeToggle) themeToggle.addEventListener('click', function () {
+      db.theme = (db.theme === 'light' || !db.theme) ? 'default' : 'light';
+      saveDB(); applyTheme(); renderThemePicker();
+    });
+    var tokRefresh = $('tokenRefreshBtn');
+    if (tokRefresh) tokRefresh.addEventListener('click', function () { TOKEN_STATE.data = null; loadTokenUsage(); });
+    var tokKimi = $('tokenKimiBtn');
+    if (tokKimi) tokKimi.addEventListener('click', openKimiQuickEntry);
+    var mtSave = $('maintSaveBtn');
+    if (mtSave) mtSave.addEventListener('click', saveMaintConfig);
+    var mtLoad = $('maintLoadBtn');
+    if (mtLoad) mtLoad.addEventListener('click', loadMaintConfig);
+    var mtBlockSave = $('maintBlockSaveBtn');
+    if (mtBlockSave) mtBlockSave.addEventListener('click', saveMaintBlocklist);
+    var mtEmojiWrap = $('maintEmojiPicker');
+    if (mtEmojiWrap) mtEmojiWrap.addEventListener('click', function (e) {
+      var t = e.target;
+      if (!t || !t.classList || !t.classList.contains('emoji-opt')) return;
+      var items = mtEmojiWrap.querySelectorAll('.emoji-opt');
+      for (var i = 0; i < items.length; i++) items[i].classList.toggle('active', items[i] === t);
+      var asset = $('maintAssetInput');
+      if (asset) asset.value = t.getAttribute('data-emoji');
+    });
     var tipClose = $('welcomeTipClose');
     if (tipClose) tipClose.addEventListener('click', hideTipBar);
     var saveTipBtn = $('saveTipBtn');

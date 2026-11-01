@@ -65,7 +65,7 @@ export async function onRequestGet({ request, env }) {
       .map(publicView)
       .sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });
 
-    return json({ ok: true, count: list.length, accounts: list }, request);
+    return json({ ok: true, count: list.length, accounts: list }, 200, request);
   } catch (e) {
     return fail('服务异常：' + (e && e.message ? e.message : '未知错误'), 500, request);
   }
@@ -99,7 +99,7 @@ export async function onRequestPost({ request, env }) {
       }
       if (!found) return fail('未找到该手机号的临时账户', 404, request);
       await saveAccounts(env, accounts);
-      return json({ ok: true, phone: phone, status: 'migrated' }, request);
+      return json({ ok: true, phone: phone, status: 'migrated' }, 200, request);
     }
 
     return fail('未知操作：' + action, 400, request);

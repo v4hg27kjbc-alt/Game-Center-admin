@@ -1330,6 +1330,7 @@ td.check-col { width: 34px; text-align: center; }
       <a href="#" class="nav-item nav-primary-item" data-page="sms" data-role="owner,admin">📨 收发</a>
       <a href="#" class="nav-item nav-primary-item" data-page="token" data-role="owner,admin">Token 用量</a>
       <a href="#" class="nav-item nav-primary-item" data-page="users" data-role="owner,admin">用户管理</a>
+      <a href="#" class="nav-item nav-primary-item" data-page="tempaccounts" data-role="owner,admin">临时账户</a>
       <a href="#" class="nav-item nav-primary-item" data-page="maint" data-role="owner,admin">维护控制</a>
       <span class="nav-divider">更多</span>
       <a href="#" class="nav-item" data-page="feedbacks" data-role="owner,admin">反馈管理</a>
@@ -1776,6 +1777,30 @@ td.check-col { width: 34px; text-align: center; }
             <tbody id="usersTbody"></tbody>
           </table>
           <p id="usersEmpty" class="empty hidden">暂无用户</p>
+        </div>
+      </section>
+
+      <!-- 临时账户（维护期迁移引导） -->
+      <section id="page-tempaccounts" class="page hidden">
+        <div class="toolbar">
+          <div>
+            <div class="toolbar-title">临时账户</div>
+            <p class="sub-note">维护期访客通过主站 /migrate.html 创建临时账户（真实验证码校验，仅存手机号与状态，不落明文密码）；数据存储于 NEWS_KV admin:temp-accounts:v1，与主站 /api/temp-account 共享。修复完成后可在此标记「已迁移」。</p>
+          </div>
+        </div>
+        <div id="taStatus" class="list-status"></div>
+
+        <div class="table-card">
+          <div class="toolbar-title" style="font-size:14px">临时账户列表（<span id="taCount">0</span>）</div>
+          <div class="batch-bar">
+            <button id="taRefreshBtn" class="btn btn-ghost" type="button">刷新</button>
+            <span class="settings-note">状态：pending=待迁移；migrated=已迁移。</span>
+          </div>
+          <table class="table">
+            <thead><tr><th>手机号(脱敏)</th><th>创建时间</th><th>验证时间</th><th>迁移时间</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody id="taTbody"></tbody>
+          </table>
+          <p id="taEmpty" class="empty hidden">暂无临时账户</p>
         </div>
       </section>
 
@@ -2411,7 +2436,7 @@ td.check-col { width: 34px; text-align: center; }
   function switchPage(name) {
     // 敏感面板前置身份验证（登录密码）
     if (typeof requireGate === 'function' && !requireGate(name)) return;
-    var pages = ['dashboard', 'sms', 'token', 'users', 'maint', 'feedbacks', 'recommendations', 'ops', 'notices', 'usercontrol', 'trash', 'vault', 'sites', 'settings'];
+    var pages = ['dashboard', 'sms', 'token', 'users', 'tempaccounts', 'maint', 'feedbacks', 'recommendations', 'ops', 'notices', 'usercontrol', 'trash', 'vault', 'sites', 'settings'];
     for (var i = 0; i < pages.length; i++) {
       var pg = $('page-' + pages[i]);
       if (pg) pg.classList.toggle('hidden', pages[i] !== name);
@@ -2420,12 +2445,13 @@ td.check-col { width: 34px; text-align: center; }
     for (var j = 0; j < navs.length; j++) {
       navs[j].classList.toggle('active', navs[j].getAttribute('data-page') === name);
     }
-    var titles = { dashboard: '数据看板', sms: '收发模块', token: 'Token 用量', users: '用户管理', maint: '维护控制', feedbacks: '反馈管理', recommendations: '推荐机型', ops: '运营选题', notices: '公告管理', usercontrol: '航站服务台', trash: '回收站', vault: '密钥保险柜', sites: '站点管理', settings: '系统设置' };
+    var titles = { dashboard: '数据看板', sms: '收发模块', token: 'Token 用量', users: '用户管理', tempaccounts: '临时账户', maint: '维护控制', feedbacks: '反馈管理', recommendations: '推荐机型', ops: '运营选题', notices: '公告管理', usercontrol: '航站服务台', trash: '回收站', vault: '密钥保险柜', sites: '站点管理', settings: '系统设置' };
     $('pageTitle').textContent = titles[name] || '';
     if (name === 'dashboard') { loadStats(); renderTrend(); renderRecent(); renderNotes(); refreshLivePanels(); }
     if (name === 'sms') renderSmsPage();
     if (name === 'token') renderTokenPage();
     if (name === 'users') renderUsersPage();
+    if (name === 'tempaccounts') loadTempAccounts();
     if (name === 'maint') renderMaintPage();
     if (name === 'feedbacks') loadFeedbacks();
     if (name === 'recommendations') loadRecommendations(false);
@@ -3791,6 +3817,61 @@ td.check-col { width: 34px; text-align: center; }
       loadUsers();
     }).catch(function (err) {
       usersStatus('创建失败：' + ((err && err.message) ? err.message : '未知错误'), true);
+    });
+  }
+
+  // ===== 临时账户（维护期迁移引导，/api/temp-accounts） =====
+  function taStatus(msg, isErr) {
+    var el = $('taStatus');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.className = 'list-status' + (isErr ? ' error' : '');
+  }
+  function loadTempAccounts() {
+    recRequest('/api/temp-accounts', { method: 'GET' }).then(function (data) {
+      if (!data || data.ok !== true) { taStatus((data && data.message) || '加载失败', true); return; }
+      var list = data.accounts || [];
+      var tb = $('taTbody');
+      var count = $('taCount');
+      var empty = $('taEmpty');
+      if (count) count.textContent = String(data.count || list.length);
+      if (!tb) return;
+      tb.innerHTML = '';
+      if (!list.length) { if (empty) empty.classList.remove('hidden'); taStatus(''); return; }
+      if (empty) empty.classList.add('hidden');
+      list.forEach(function (a) {
+        var tr = document.createElement('tr');
+        var st = a.status === 'migrated' ? '已迁移' : '待迁移';
+        var stClass = a.status === 'migrated' ? 'badge badge-ok' : 'badge badge-warn';
+        var op = '';
+        if (a.status !== 'migrated') {
+          op = '<button class="btn btn-ghost btn-sm" data-phone="' + a.phone + '">标记已迁移</button>';
+        } else {
+          op = '<span class="settings-note">已完成</span>';
+        }
+        tr.innerHTML =
+          '<td>' + (a.phoneMasked || '') + '</td>' +
+          '<td>' + (a.createdAt || '') + '</td>' +
+          '<td>' + (a.verifiedAt || '') + '</td>' +
+          '<td>' + (a.migratedAt || '') + '</td>' +
+          '<td><span class="' + stClass + '">' + st + '</span></td>' +
+          '<td>' + op + '</td>';
+        tb.appendChild(tr);
+      });
+      taStatus('共 ' + list.length + ' 条');
+    }).catch(function (err) {
+      taStatus('加载失败：' + ((err && err.message) ? err.message : '未知错误'), true);
+    });
+  }
+  function markTempMigrated(phone) {
+    if (!phone) return;
+    if (!confirm('确认将该临时账户（' + phone + '）标记为已迁移？')) return;
+    recRequest('/api/temp-accounts', { method: 'POST', body: { action: 'mark-migrated', phone: phone } }).then(function (data) {
+      if (!data || data.ok !== true) { taStatus((data && data.message) || '操作失败', true); return; }
+      taStatus('已将 ' + phone + ' 标记为已迁移');
+      loadTempAccounts();
+    }).catch(function (err) {
+      taStatus('操作失败：' + ((err && err.message) ? err.message : '未知错误'), true);
     });
   }
 
@@ -6029,6 +6110,13 @@ td.check-col { width: 34px; text-align: center; }
     if (cuBtn) cuBtn.addEventListener('click', createUser);
     var usersRefresh = $('usersRefreshBtn');
     if (usersRefresh) usersRefresh.addEventListener('click', loadUsers);
+    var taRefresh = $('taRefreshBtn');
+    if (taRefresh) taRefresh.addEventListener('click', loadTempAccounts);
+    var taTbody = $('taTbody');
+    if (taTbody) taTbody.addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-phone]');
+      if (btn) markTempMigrated(btn.getAttribute('data-phone'));
+    });
     var usersCheckAll = $('usersCheckAll');
     if (usersCheckAll) usersCheckAll.addEventListener('change', function () {
       var cbs = document.querySelectorAll('#usersTbody .user-check');

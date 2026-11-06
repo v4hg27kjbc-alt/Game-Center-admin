@@ -1331,6 +1331,7 @@ td.check-col { width: 34px; text-align: center; }
       <a href="#" class="nav-item nav-primary-item" data-page="token" data-role="owner,admin">Token 用量</a>
       <a href="#" class="nav-item nav-primary-item" data-page="users" data-role="owner,admin">用户管理</a>
       <a href="#" class="nav-item nav-primary-item" data-page="tempaccounts" data-role="owner,admin">临时账户</a>
+      <a href="#" class="nav-item nav-primary-item" data-page="trialfb" data-role="owner,admin">内测反馈</a>
       <a href="#" class="nav-item nav-primary-item" data-page="maint" data-role="owner,admin">维护控制</a>
       <span class="nav-divider">更多</span>
       <a href="#" class="nav-item" data-page="feedbacks" data-role="owner,admin">反馈管理</a>
@@ -1819,6 +1820,45 @@ td.check-col { width: 34px; text-align: center; }
             <tbody id="taTbody"></tbody>
           </table>
           <p id="taEmpty" class="empty hidden">暂无临时账户</p>
+        </div>
+      </section>
+
+      <!-- 内测文章反馈（选题投票 + 读后评价） -->
+      <section id="page-trialfb" class="page hidden">
+        <div class="toolbar">
+          <div>
+            <div class="toolbar-title">内测反馈</div>
+            <p class="sub-note">内测文章仅登录用户可见；登录用户可对下一篇选题投票（一人一票），读完后每篇仅弹一次评价（评分 1-5 星 + 文字）。数据由主站 /api/account 写入 SMS_KV：vote:counts:v1 / vote:list:v1 / feedback:list:v1，此处只读汇总。</p>
+          </div>
+        </div>
+        <div id="tfStatus" class="list-status"></div>
+
+        <div class="uc-stat-row">
+          <div class="uc-stat-card"><div class="uc-stat-num" id="tfVoteNum">0</div><div class="uc-stat-label">投票总数</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="tfFbNum">0</div><div class="uc-stat-label">评价总数</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="tfArticleNum">0</div><div class="uc-stat-label">涉及文章数</div></div>
+        </div>
+
+        <div class="table-card">
+          <div class="toolbar-title" style="font-size:14px">按文章汇总</div>
+          <div class="batch-bar">
+            <button id="tfRefreshBtn" class="btn btn-ghost" type="button">刷新</button>
+            <span class="settings-note">投票选项按票数从高到低排列。</span>
+          </div>
+          <table class="table">
+            <thead><tr><th>文章 ID</th><th>总票数</th><th>各选项票数</th><th>评价数</th><th>平均分</th></tr></thead>
+            <tbody id="tfArticleTbody"></tbody>
+          </table>
+          <p id="tfArticleEmpty" class="empty hidden">暂无投票数据</p>
+        </div>
+
+        <div class="table-card" style="margin-top:16px">
+          <div class="toolbar-title" style="font-size:14px">读后评价（最近 100 条）</div>
+          <table class="table">
+            <thead><tr><th>时间</th><th>用户</th><th>文章 ID</th><th>评分</th><th>评价内容</th></tr></thead>
+            <tbody id="tfFbTbody"></tbody>
+          </table>
+          <p id="tfFbEmpty" class="empty hidden">暂无评价</p>
         </div>
       </section>
 
@@ -2454,7 +2494,7 @@ td.check-col { width: 34px; text-align: center; }
   function switchPage(name) {
     // 敏感面板前置身份验证（登录密码）
     if (typeof requireGate === 'function' && !requireGate(name)) return;
-    var pages = ['dashboard', 'sms', 'token', 'users', 'tempaccounts', 'maint', 'feedbacks', 'recommendations', 'ops', 'notices', 'usercontrol', 'trash', 'vault', 'sites', 'settings'];
+    var pages = ['dashboard', 'sms', 'token', 'users', 'tempaccounts', 'trialfb', 'maint', 'feedbacks', 'recommendations', 'ops', 'notices', 'usercontrol', 'trash', 'vault', 'sites', 'settings'];
     for (var i = 0; i < pages.length; i++) {
       var pg = $('page-' + pages[i]);
       if (pg) pg.classList.toggle('hidden', pages[i] !== name);
@@ -2463,13 +2503,14 @@ td.check-col { width: 34px; text-align: center; }
     for (var j = 0; j < navs.length; j++) {
       navs[j].classList.toggle('active', navs[j].getAttribute('data-page') === name);
     }
-    var titles = { dashboard: '数据看板', sms: '收发模块', token: 'Token 用量', users: '用户管理', tempaccounts: '临时账户', maint: '维护控制', feedbacks: '反馈管理', recommendations: '推荐机型', ops: '运营选题', notices: '公告管理', usercontrol: '航站服务台', trash: '回收站', vault: '密钥保险柜', sites: '站点管理', settings: '系统设置' };
+    var titles = { dashboard: '数据看板', sms: '收发模块', token: 'Token 用量', users: '用户管理', tempaccounts: '临时账户', trialfb: '内测反馈', maint: '维护控制', feedbacks: '反馈管理', recommendations: '推荐机型', ops: '运营选题', notices: '公告管理', usercontrol: '航站服务台', trash: '回收站', vault: '密钥保险柜', sites: '站点管理', settings: '系统设置' };
     $('pageTitle').textContent = titles[name] || '';
     if (name === 'dashboard') { loadStats(); renderTrend(); renderRecent(); renderNotes(); refreshLivePanels(); }
     if (name === 'sms') renderSmsPage();
     if (name === 'token') renderTokenPage();
     if (name === 'users') renderUsersPage();
     if (name === 'tempaccounts') loadTempAccounts();
+    if (name === 'trialfb') loadTrialFeedback();
     if (name === 'maint') renderMaintPage();
     if (name === 'feedbacks') loadFeedbacks();
     if (name === 'recommendations') loadRecommendations(false);
@@ -3990,6 +4031,77 @@ td.check-col { width: 34px; text-align: center; }
       loadUsers();
     }).catch(function (err) {
       usersStatus('创建失败：' + ((err && err.message) ? err.message : '未知错误'), true);
+    });
+  }
+
+  // ===== 内测文章反馈（选题投票 + 读后评价，/api/trial-feedback） =====
+  function tfStatus(msg, isErr) {
+    var el = $('tfStatus');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.className = 'list-status' + (isErr ? ' error' : '');
+  }
+  function tfEsc(v) {
+    return String(v === undefined || v === null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function loadTrialFeedback() {
+    tfStatus('加载中…');
+    recRequest('/api/trial-feedback?limit=100', { method: 'GET' }).then(function (data) {
+      if (!data || data.ok !== true) { tfStatus((data && data.message) || '加载失败', true); return; }
+      var sum = data.summary || {};
+      if ($('tfVoteNum')) $('tfVoteNum').textContent = String(sum.voteTotal || 0);
+      if ($('tfFbNum')) $('tfFbNum').textContent = String(sum.feedbackTotal || 0);
+      if ($('tfArticleNum')) $('tfArticleNum').textContent = String(sum.articleCount || 0);
+
+      var rows = data.articles || [];
+      var tb = $('tfArticleTbody');
+      var empty = $('tfArticleEmpty');
+      if (tb) {
+        tb.innerHTML = '';
+        if (!rows.length) { if (empty) empty.classList.remove('hidden'); }
+        else {
+          if (empty) empty.classList.add('hidden');
+          rows.forEach(function (a) {
+            var opts = a.options || {};
+            var keys = Object.keys(opts).sort(function (x, y) { return (Number(opts[y]) || 0) - (Number(opts[x]) || 0); });
+            var optText = keys.length ? keys.map(function (k) { return tfEsc(k) + '：' + (Number(opts[k]) || 0); }).join('　') : '—';
+            var tr = document.createElement('tr');
+            tr.innerHTML =
+              '<td>' + tfEsc(a.articleId) + '</td>' +
+              '<td>' + (Number(a.totalVotes) || 0) + '</td>' +
+              '<td style="max-width:320px;white-space:normal">' + optText + '</td>' +
+              '<td>' + (Number(a.feedbackCount) || 0) + '</td>' +
+              '<td>' + (a.feedbackCount ? (Number(a.avgScore) || 0) + ' / 5' : '—') + '</td>';
+            tb.appendChild(tr);
+          });
+        }
+      }
+
+      var fb = data.feedback || [];
+      var ftb = $('tfFbTbody');
+      var fempty = $('tfFbEmpty');
+      if (ftb) {
+        ftb.innerHTML = '';
+        if (!fb.length) { if (fempty) fempty.classList.remove('hidden'); }
+        else {
+          if (fempty) fempty.classList.add('hidden');
+          fb.forEach(function (f) {
+            var tr = document.createElement('tr');
+            var at = String((f && f.at) || '');
+            tr.innerHTML =
+              '<td>' + tfEsc(at.replace('T', ' ').slice(0, 19)) + '</td>' +
+              '<td>' + tfEsc((f && (f.username || f.uid)) || '') + '</td>' +
+              '<td>' + tfEsc(f && f.articleId) + '</td>' +
+              '<td>' + (Number(f && f.score) || 0) + '</td>' +
+              '<td style="max-width:360px;white-space:normal">' + tfEsc(f && f.text) + '</td>';
+            ftb.appendChild(tr);
+          });
+        }
+      }
+      tfStatus('共 ' + rows.length + ' 篇文章有数据，评价 ' + fb.length + ' 条');
+    }).catch(function (err) {
+      tfStatus('加载失败：' + ((err && err.message) ? err.message : '未知错误'), true);
     });
   }
 
@@ -6285,6 +6397,8 @@ td.check-col { width: 34px; text-align: center; }
     if (usersRefresh) usersRefresh.addEventListener('click', loadUsers);
     var taRefresh = $('taRefreshBtn');
     if (taRefresh) taRefresh.addEventListener('click', loadTempAccounts);
+    var tfRefresh = $('tfRefreshBtn');
+    if (tfRefresh) tfRefresh.addEventListener('click', loadTrialFeedback);
     var taTbody = $('taTbody');
     if (taTbody) taTbody.addEventListener('click', function (e) {
       var btn = e.target.closest('button[data-phone]');

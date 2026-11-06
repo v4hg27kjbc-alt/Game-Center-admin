@@ -10,7 +10,7 @@
  * 路由：
  *   GET  /api/users                      列表（admin）
  *   POST /api/users                      创建（admin；passwordHash 前端 SHA-256）
- *   POST /api/users/action               { ids:[...], action:'mute'|'unmute'|'flag'|'ban'|'unban', minutes?, reason? }
+ *   POST /api/users/action               { ids:[...], action:'mute'|'unmute'|'flag'|'ban'|'unban'|'verify-phone'|'unverify-phone', minutes?, reason? }
  *   GET  /api/users/:id                  单用户详情（预留）
  *   POST /api/users/:id/action           单用户操作（兼容）
  */
@@ -19,6 +19,50 @@ import { preflight, json, fail, readBody, str, isAdmin, adminTokenOf, errText, n
 
 const USERS_KEY = 'admin:users:v1';
 const MAX_USERS = 2000;
+const VERIFIED_KEY = 'sms:verified:';
+const VERIFIED_TTL = 15552000;
+
+/** 主站账号索引（与 /api/account 共用 SMS_KV） */
+function siteKvOf(env) {
+  return (env && env.SMS_KV && typeof env.SMS_KV.get === 'function') ? env.SMS_KV : null;
+}
+
+/** 读取主站侧的绑定情况：acct:p:<phone> → uid → acct:u:<uid> */
+async function siteLinkOf(env, phone) {
+  const kv = siteKvOf(env);
+  const p = normalizePhone(phone);
+  if (!kv || !p) return null;
+  try {
+    const uid = await kv.get('acct:p:' + p);
+    if (!uid) return null;
+    let user = null;
+    try { user = await kv.get('acct:u:' + uid, 'json'); } catch (e) { user = null; }
+    return {
+      uid: uid,
+      username: (user && user.username) || '',
+      phoneVerified: !!(user && user.phoneVerified),
+      lastLoginAt: (user && user.lastLoginAt) || '',
+      loginCount: (user && Number(user.loginCount)) || 0
+    };
+  } catch (e) { return null; }
+}
+
+/** 把「手机号已验证」标记同步给主站，前端即可免提示 */
+async function syncPhoneMarks(env, list) {
+  const kv = siteKvOf(env);
+  if (!kv) return;
+  for (const u of (list || [])) {
+    const p = normalizePhone(u && u.phone);
+    if (!p) continue;
+    try {
+      if (u.phoneVerified) {
+        await kv.put(VERIFIED_KEY + p, u.phoneVerifiedAt || nowIso(), { expirationTtl: VERIFIED_TTL });
+      } else {
+        await kv.delete(VERIFIED_KEY + p);
+      }
+    } catch (e) {}
+  }
+}
 
 function kvOf(env) {
   return (env && env.NEWS_KV && typeof env.NEWS_KV.get === 'function' && typeof env.NEWS_KV.put === 'function') ? env.NEWS_KV : null;
@@ -53,12 +97,21 @@ function publicView(u) {
     mutedUntil: u.mutedUntil || null,
     violationCount: u.violationCount || 0,
     source: u.source || 'admin',
-    createdAt: u.createdAt || ''
+    createdAt: u.createdAt || '',
+    phoneVerified: !!u.phoneVerified,
+    phoneVerifiedAt: u.phoneVerifiedAt || '',
+    siteUid: u.siteUid || '',
+    siteBoundAt: u.siteBoundAt || '',
+    siteLastLoginAt: u.siteLastLoginAt || ''
   };
 }
 
 function normalizeAction(action) {
-  const map = { mute: 'mute', unmute: 'unmute', flag: 'flag', unflag: 'flag', ban: 'ban', unban: 'unban' };
+  const map = {
+    mute: 'mute', unmute: 'unmute', flag: 'flag', unflag: 'flag', ban: 'ban', unban: 'unban',
+    'verify-phone': 'verify-phone', verifyphone: 'verify-phone', verify_phone: 'verify-phone',
+    'unverify-phone': 'unverify-phone', unverifyphone: 'unverify-phone', unverify_phone: 'unverify-phone'
+  };
   return map[String(action || '').toLowerCase()] || null;
 }
 
@@ -98,7 +151,24 @@ export async function onRequestGet({ request, env }) {
     if (statusFilter && statusFilter !== 'all') {
       list = list.filter(function (x) { return (x.status || 'active') === statusFilter; });
     }
-    return json({ ok: true, data: { users: list.map(publicView), total: users.length, count: list.length } }, 200, request, { 'Cache-Control': 'no-store' });
+    const view = [];
+    const cap = Math.min(list.length, 200);
+    for (let i = 0; i < list.length; i++) {
+      const v = publicView(list[i]);
+      if (i < cap && v.phone) {
+        const link = await siteLinkOf(env, v.phone);
+        if (link) {
+          v.siteUid = link.uid;
+          v.siteUsername = link.username;
+          v.sitePhoneVerified = link.phoneVerified;
+          v.siteLastLoginAt = link.lastLoginAt;
+          v.siteLoginCount = link.loginCount;
+          if (link.phoneVerified && !v.phoneVerified) { v.phoneVerified = true; v.phoneVerifiedAt = v.phoneVerifiedAt || '前端已验证'; }
+        }
+      }
+      view.push(v);
+    }
+    return json({ ok: true, data: { users: view, total: users.length, count: list.length } }, 200, request, { 'Cache-Control': 'no-store' });
   } catch (e) {
     return fail('用户列表获取失败：' + errText(e), 500, request);
   }
@@ -117,6 +187,40 @@ export async function onRequestPost({ request, env }) {
     const url = new URL(request.url);
     const seg = url.pathname.split('/').filter(Boolean);
 
+    // 兼容后台页面表单式操作：{ action:'single'|'batch', id|ids, op }
+    if (body.action === 'single' || body.action === 'batch') {
+      const compatOp = normalizeAction(body.op);
+      if (!compatOp) return fail('不支持的操作用 op', 400, request);
+      const isSingle = body.action === 'single';
+      const compatIds = (isSingle ? [String(body.id || '')] : (Array.isArray(body.ids) ? body.ids.map(String) : []))
+        .filter(function (x) { return !!x; });
+      if (!compatIds.length) return fail('请选择要操作的用户', 400, request);
+      const compatAll = await loadUsers(env);
+      const compatTarget = compatAll.filter(function (x) {
+        return compatIds.indexOf(x.id) >= 0 ||
+               compatIds.indexOf(x.username || '') >= 0 ||
+               (x.phone && compatIds.indexOf(x.phone) >= 0);
+      });
+      if (!compatTarget.length) return fail('未匹配到所选用户', 404, request);
+      compatTarget.forEach(function (u) { applyAction(u, compatOp, body); });
+      await saveUsers(env, compatAll);
+      await syncPhoneMarks(env, compatTarget);
+      if (isSingle) {
+        const only = compatTarget[0];
+        const view = publicView(only);
+        const link = view.phone ? await siteLinkOf(env, view.phone) : null;
+        if (link) {
+          view.siteUid = link.uid;
+          view.siteUsername = link.username;
+          view.sitePhoneVerified = link.phoneVerified;
+          view.siteLastLoginAt = link.lastLoginAt;
+          if (link.phoneVerified && !view.phoneVerified) { view.phoneVerified = true; view.phoneVerifiedAt = view.phoneVerifiedAt || '前端已验证'; }
+        }
+        return json({ ok: true, message: '已处理 1 个用户', data: view }, 200, request);
+      }
+      return json({ ok: true, message: '已处理 ' + compatTarget.length + ' 个用户', data: { count: compatTarget.length, ids: compatTarget.map(function (x) { return x.id; }) } }, 200, request);
+    }
+
     // 单用户操作 POST /api/users/:id/action
     if (seg.length >= 4 && seg[seg.length - 3] === 'users' && seg[seg.length - 1] === 'action') {
       const id = decodeURIComponent(seg[seg.length - 2]);
@@ -127,7 +231,17 @@ export async function onRequestPost({ request, env }) {
       if (!u) return fail('用户不存在', 404, request);
       applyAction(u, action, body);
       await saveUsers(env, users);
-      return json({ ok: true, data: publicView(u) }, 200, request);
+      await syncPhoneMarks(env, [u]);
+      const view = publicView(u);
+      const link = view.phone ? await siteLinkOf(env, view.phone) : null;
+      if (link) {
+        view.siteUid = link.uid;
+        view.siteUsername = link.username;
+        view.sitePhoneVerified = link.phoneVerified;
+        view.siteLastLoginAt = link.lastLoginAt;
+        if (link.phoneVerified && !view.phoneVerified) { view.phoneVerified = true; view.phoneVerifiedAt = view.phoneVerifiedAt || '前端已验证'; }
+      }
+      return json({ ok: true, data: view }, 200, request);
     }
 
     // 批量操作 POST /api/users/action
@@ -141,6 +255,7 @@ export async function onRequestPost({ request, env }) {
       if (!target.length) return fail('未匹配到所选用户', 404, request);
       target.forEach(function (u) { applyAction(u, action, body); });
       await saveUsers(env, users);
+      await syncPhoneMarks(env, target);
       return json({ ok: true, data: { count: target.length, ids: target.map(function (x) { return x.id; }) } }, 200, request);
     }
 
@@ -169,7 +284,11 @@ export async function onRequestPost({ request, env }) {
       mutedUntil: null,
       violationCount: 0,
       source: 'admin',
-      createdAt: nowIso()
+      createdAt: nowIso(),
+      phoneVerified: false,
+      phoneVerifiedAt: '',
+      siteUid: '',
+      siteBoundAt: ''
     };
     users.push(user);
     await saveUsers(env, users);
@@ -207,6 +326,24 @@ function applyAction(u, action, body) {
       break;
     case 'unban':
       if (u.status === 'banned' || u.status === 'flagged') { u.status = 'active'; u.lastActionAt = nowIso(); }
+      break;
+    case 'verify-phone':
+      if (!normalizePhone(u.phone)) {
+        u.phoneVerified = false;
+        u.lastActionAt = nowIso();
+        u.lastActionReason = '未填写手机号，无法标记验证';
+        break;
+      }
+      u.phoneVerified = true;
+      u.phoneVerifiedAt = nowIso();
+      u.lastActionAt = nowIso();
+      u.lastActionReason = str(body.reason, 200) || '后台标记手机号已验证';
+      break;
+    case 'unverify-phone':
+      u.phoneVerified = false;
+      u.phoneVerifiedAt = '';
+      u.lastActionAt = nowIso();
+      u.lastActionReason = str(body.reason, 200) || '后台清除手机号验证状态';
       break;
   }
 }

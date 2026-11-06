@@ -71,6 +71,8 @@ export async function onRequest(context) {
 
   // ---- 校验通过，一次性删除 ----
   await kv.delete('sms:code:' + phone).catch(function () {});
+  // 记录「该手机号已验证」，主站登录时据此跳过“未绑定手机号”提示
+  await kv.put('sms:verified:' + phone, new Date().toISOString(), { expirationTtl: 15552000 }).catch(function () {});
   return ok({ verified: true, phone: maskPhone(phone) }, cors.headers);
 }
 

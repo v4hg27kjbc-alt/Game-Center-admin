@@ -1760,7 +1760,7 @@ td.check-col { width: 34px; text-align: center; }
             <input type="text" id="cuPhone" class="input" style="width:180px" placeholder="手机号（必填，11位）" autocomplete="off">
             <button id="cuCreateBtn" class="btn btn-primary" type="button">创建用户</button>
           </div>
-          <p class="settings-note">说明：密码仅以 SHA-256 摘要形式提交服务端，前端与传输层均不落明文。</p>
+          <p class="settings-note">说明：密码仅以 SHA-256 摘要形式提交服务端，前端与传输层均不落明文。手机号默认「未验证」，该用户在前端首次登录会提示用短信验证码绑定；也可在列表中点「标记已验证」直接免提示。</p>
         </div>
 
         <div class="table-card">
@@ -1773,7 +1773,7 @@ td.check-col { width: 34px; text-align: center; }
             <span class="settings-note">勾选列表左侧复选框后执行批量操作；点击表头复选框可全选当前页。</span>
           </div>
           <table class="table">
-            <thead><tr><th class="check-col"><input type="checkbox" id="usersCheckAll" title="全选当前页"></th><th>用户名</th><th>手机号(脱敏)</th><th>密码摘要</th><th>注册时间</th><th>状态</th><th>操作</th></tr></thead>
+            <thead><tr><th class="check-col"><input type="checkbox" id="usersCheckAll" title="全选当前页"></th><th>用户名</th><th>手机号(脱敏)</th><th>手机号验证</th><th>前端账号</th><th>密码摘要</th><th>注册时间</th><th>状态</th><th>操作</th></tr></thead>
             <tbody id="usersTbody"></tbody>
           </table>
           <p id="usersEmpty" class="empty hidden">暂无用户</p>
@@ -3895,6 +3895,23 @@ td.check-col { width: 34px; text-align: center; }
       c0.appendChild(cb);
       var c1 = document.createElement('td'); c1.textContent = u.username || '—';
       var c2 = document.createElement('td'); c2.textContent = smsMaskPhone(u.phone);
+      var c2b = document.createElement('td');
+      var hasPhone = !!u.phone;
+      var vfd = !!u.phoneVerified;
+      c2b.textContent = !hasPhone ? '无手机号' : (vfd ? '已验证' : '未验证');
+      c2b.style.color = !hasPhone ? '#94a3b8' : (vfd ? '#16a34a' : '#b45309');
+      c2b.title = vfd
+        ? ('验证时间：' + (u.phoneVerifiedAt || '（后台标记）'))
+        : '未验证：该用户在前端首次登录会提示绑定手机号';
+      var c2c = document.createElement('td');
+      if (u.siteUid) {
+        c2c.textContent = '已开通：' + (u.siteUsername || u.siteUid) + (u.siteLastLoginAt ? '（最近登录 ' + String(u.siteLastLoginAt).slice(0, 10) + '）' : '');
+        c2c.style.color = '#16a34a';
+      } else {
+        c2c.textContent = hasPhone ? '待首次登录自动开通' : '—';
+        c2c.style.color = '#94a3b8';
+      }
+      c2c.title = '前端账号与后台按手机号/用户名自动打通';
       var c3 = document.createElement('td');
       var ph = (u.passwordHash || u.password || '').toString();
       c3.textContent = ph ? ph.slice(0, 12) + '…' : '—'; c3.style.fontFamily = 'monospace'; c3.title = ph;
@@ -3912,6 +3929,7 @@ td.check-col { width: 34px; text-align: center; }
         { act: 'flag', label: st === 'flagged' ? '再标记违规' : '标记违规' },
         { act: (st === 'banned' || st === 'flagged') ? 'unban' : 'ban', label: (st === 'banned' || st === 'flagged') ? '解除封锁' : '封锁' }
       ];
+      if (u.phone) acts.push({ act: vfd ? 'unverify-phone' : 'verify-phone', label: vfd ? '取消验证' : '标记已验证' });
       for (var k = 0; k < acts.length; k++) {
         var b = document.createElement('button');
         b.className = 'btn btn-ghost'; b.style.padding = '2px 8px'; b.style.fontSize = '12px'; b.style.marginRight = '4px';
@@ -3920,7 +3938,7 @@ td.check-col { width: 34px; text-align: center; }
         b.setAttribute('data-user-act', acts[k].act);
         c6.appendChild(b);
       }
-      tr.appendChild(c0); tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c3); tr.appendChild(c4); tr.appendChild(c5); tr.appendChild(c6);
+      tr.appendChild(c0); tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c2b); tr.appendChild(c2c); tr.appendChild(c3); tr.appendChild(c4); tr.appendChild(c5); tr.appendChild(c6);
       tbody.appendChild(tr);
     });
   }
@@ -3944,6 +3962,8 @@ td.check-col { width: 34px; text-align: center; }
   }
   function usersSingleAction(id, action) {
     if (action === 'flag' && !confirm('确认将用户「' + id + '」标记违规？')) return;
+    if (action === 'verify-phone' && !confirm('标记该手机号已验证后，该用户前端登录将不再提示绑定手机号，确认？')) return;
+    if (action === 'unverify-phone' && !confirm('清除验证状态后，该用户前端登录会重新提示绑定手机号，确认？')) return;
     recRequest('/api/users', { method: 'POST', body: { action: 'single', id: id, op: action } }).then(function (data) {
       usersStatus((data && data.message) ? data.message : ('操作成功：' + id));
       loadUsers();

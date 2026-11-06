@@ -1778,6 +1778,24 @@ td.check-col { width: 34px; text-align: center; }
           </table>
           <p id="usersEmpty" class="empty hidden">暂无用户</p>
         </div>
+
+        <div class="table-card" id="saCard">
+          <div class="toolbar-title" style="font-size:14px">主站注册账户 · 登录管理（实时同步）</div>
+          <p class="settings-note">数据直接读取主站 <code>/api/account</code> 写入的注册账号（KV acct:u:*），注册信息、登录次数、最近登录时间与主站完全一致；可禁用登录、重置密码、删除账号。</p>
+          <div id="saStats" class="settings-note">—</div>
+          <div class="batch-bar">
+            <input type="text" id="saSearch" class="input" style="width:200px" placeholder="搜索 用户名 / 手机号 / UID" autocomplete="off">
+            <button id="saSearchBtn" class="btn btn-ghost" type="button">搜索</button>
+            <button id="saResetSearchBtn" class="btn btn-ghost" type="button">清空</button>
+            <button id="saRefreshBtn" class="btn btn-ghost" type="button">刷新</button>
+            <span id="saStatus" class="settings-note"></span>
+          </div>
+          <table class="table">
+            <thead><tr><th>用户名</th><th>UID</th><th>手机号(脱敏)</th><th>注册时间</th><th>最近登录</th><th>登录次数</th><th>收藏/存单</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody id="saTbody"></tbody>
+          </table>
+          <p id="saEmpty" class="empty hidden">暂无主站注册账号</p>
+        </div>
       </section>
 
       <!-- 临时账户（维护期迁移引导） -->
@@ -3707,8 +3725,143 @@ td.check-col { width: 34px; text-align: center; }
     el.className = isErr ? 'list-status err' : 'list-status';
   }
   var USERS_STATE = { loading: false, data: [], error: '' };
+  var SA_STATE = { loading: false, data: [], stats: null, search: '', bound: false };
+  function saStatus(msg, isErr) {
+    var el = $('saStatus');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.className = isErr ? 'list-status err' : 'settings-note';
+  }
+  function saFmtTime(iso) {
+    if (!iso) return '—';
+    var s = String(iso).replace('T', ' ');
+    return s.slice(0, 16);
+  }
+  function renderSiteAccounts() {
+    var tbody = $('saTbody');
+    if (!tbody) return;
+    var arr = SA_STATE.data || [];
+    var empty = $('saEmpty'); if (empty) empty.classList.toggle('hidden', arr.length > 0);
+    var st = SA_STATE.stats;
+    var statsEl = $('saStats');
+    if (statsEl) {
+      statsEl.textContent = st ? ('账号总数 ' + st.total + ' · 今日新增 ' + st.todayNew + ' · 近7日活跃 ' + st.active7 + ' · 已禁用 ' + st.banned + ' · 绑定手机号 ' + st.withPhone) : '—';
+    }
+    tbody.innerHTML = '';
+    arr.forEach(function (u) {
+      var tr = document.createElement('tr');
+      var c1 = document.createElement('td'); c1.textContent = u.displayName && u.displayName !== u.username ? (u.username + ' (' + u.displayName + ')') : (u.username || '—');
+      var c2 = document.createElement('td'); c2.textContent = u.uid || '—'; c2.style.fontFamily = 'monospace';
+      var c3 = document.createElement('td'); c3.textContent = u.phoneMasked || '—';
+      var c4 = document.createElement('td'); c4.textContent = saFmtTime(u.createdAt);
+      var c5 = document.createElement('td'); c5.textContent = saFmtTime(u.lastLoginAt);
+      var c6 = document.createElement('td'); c6.textContent = String(u.loginCount || 0);
+      var c7 = document.createElement('td'); c7.textContent = (u.favorites || 0) + ' / ' + (u.saved || 0);
+      var banned = (u.status === 'banned');
+      var c8 = document.createElement('td');
+      c8.textContent = banned ? '已禁用' : '正常';
+      c8.style.color = banned ? '#dc2626' : '#16a34a';
+      var c9 = document.createElement('td');
+      var acts = [
+        { act: banned ? 'unban' : 'ban', label: banned ? '恢复登录' : '禁用登录' },
+        { act: 'reset-password', label: '重置密码' },
+        { act: 'delete', label: '删除' }
+      ];
+      acts.forEach(function (a, idx) {
+        if (idx) c9.appendChild(document.createTextNode(' '));
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = (a.act === 'delete') ? 'btn btn-danger' : 'btn btn-ghost';
+        btn.style.fontSize = '12px';
+        btn.textContent = a.label;
+        btn.setAttribute('data-sa-act', a.act);
+        btn.setAttribute('data-sa-uid', u.uid || '');
+        btn.setAttribute('data-sa-name', u.username || '');
+        c9.appendChild(btn);
+      });
+      tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c3); tr.appendChild(c4);
+      tr.appendChild(c5); tr.appendChild(c6); tr.appendChild(c7); tr.appendChild(c8); tr.appendChild(c9);
+      tbody.appendChild(tr);
+    });
+  }
+  function loadSiteAccounts() {
+    if (SA_STATE.loading) return;
+    SA_STATE.loading = true;
+    saStatus('正在同步主站注册账号…');
+    var url = '/api/accounts' + (SA_STATE.search ? ('?search=' + encodeURIComponent(SA_STATE.search)) : '');
+    recRequest(url, { method: 'GET' }).then(function (data) {
+      var dd = (data && data.data && typeof data.data === 'object') ? data.data : data;
+      SA_STATE.data = (dd && Array.isArray(dd.users)) ? dd.users : [];
+      SA_STATE.stats = (dd && dd.stats) ? dd.stats : null;
+      saStatus('已同步 ' + SA_STATE.data.length + ' 个账号');
+      renderSiteAccounts();
+    }).catch(function (err) {
+      saStatus('同步失败：' + ((err && err.message) ? err.message : '未知错误'), true);
+      renderSiteAccounts();
+    }).finally(function () { SA_STATE.loading = false; });
+  }
+  function saAction(act, uid, name) {
+    if (!uid) return;
+    var body = { action: act, uid: uid };
+    if (act === 'delete') {
+      if (!window.confirm('确定删除账号「' + (name || uid) + '」？删除后该用户名与手机号可重新注册，且不可恢复。')) return;
+    } else if (act === 'ban') {
+      if (!window.confirm('确定禁止账号「' + (name || uid) + '」登录？该账号已登录的会话会立即失效。')) return;
+    } else if (act === 'reset-password') {
+      var np = window.prompt('输入新密码（至少6位，留空则使用默认 12345678）：', '12345678');
+      if (np === null) return;
+      np = String(np || '').trim();
+      if (np.length < 6) { window.alert('新密码至少 6 位'); return; }
+      body.password = np;
+    }
+    saStatus('正在执行操作…');
+    recRequest('/api/accounts', { method: 'POST', body: body }).then(function (data) {
+      var dd = (data && data.data && typeof data.data === 'object') ? data.data : data;
+      var msg = (dd && dd.message) ? dd.message : '操作完成';
+      if (act === 'reset-password' && dd && dd.password) msg = '密码已重置为：' + dd.password + '（请转告用户并提醒尽快修改）';
+      saStatus(msg);
+      window.alert(msg);
+      loadSiteAccounts();
+    }).catch(function (err) {
+      var msg = (err && err.message) ? err.message : '未知错误';
+      saStatus('操作失败：' + msg, true);
+      window.alert('操作失败：' + msg);
+    });
+  }
+  function bindSiteAccountsUI() {
+    if (SA_STATE.bound) return;
+    SA_STATE.bound = true;
+    var rf = $('saRefreshBtn');
+    if (rf) rf.addEventListener('click', function () { loadSiteAccounts(); });
+    var sb = $('saSearchBtn');
+    if (sb) sb.addEventListener('click', function () {
+      var inp = $('saSearch');
+      SA_STATE.search = inp ? String(inp.value || '').trim() : '';
+      loadSiteAccounts();
+    });
+    var rs = $('saResetSearchBtn');
+    if (rs) rs.addEventListener('click', function () {
+      var inp = $('saSearch'); if (inp) inp.value = '';
+      SA_STATE.search = '';
+      loadSiteAccounts();
+    });
+    var inp0 = $('saSearch');
+    if (inp0) inp0.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { SA_STATE.search = String(inp0.value || '').trim(); loadSiteAccounts(); }
+    });
+    var tb = $('saTbody');
+    if (tb) tb.addEventListener('click', function (e) {
+      var t = e.target;
+      if (!t || !t.getAttribute) return;
+      var act = t.getAttribute('data-sa-act');
+      if (!act) return;
+      saAction(act, t.getAttribute('data-sa-uid'), t.getAttribute('data-sa-name'));
+    });
+  }
   function renderUsersPage() {
+    bindSiteAccountsUI();
     loadUsers();
+    loadSiteAccounts();
   }
   function loadUsers() {
     if (USERS_STATE.loading) return;

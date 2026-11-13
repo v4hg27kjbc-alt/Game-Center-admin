@@ -10,12 +10,13 @@
  * 路由：
  *   GET  /api/coupons?action=list&status=&q=&limit=200   列表 + 统计
  *   GET  /api/coupons?action=stats                       仅统计
- *   POST /api/coupons  { action: 'gen',    count, prefix, type, value, note, expDays }
+ *   POST /api/coupons  { action: 'gen',    count, prefix, type, value, note, expDays, projectKeys }
  *   POST /api/coupons  { action: 'revoke', codes: ['GC-XXXX-XXXX', ...] }   作废（保留记录）
  *   POST /api/coupons  { action: 'delete', codes: [...], force: true }      物理删除
  */
 
 import { preflight, json, fail, isAdmin, readBody } from './_utils.js';
+import { normProjectKeys } from './_lib/data/projects.js';
 
 const INDEX_KEY = 'coupon:index:v1';
 const MAX_INDEX = 5000;
@@ -68,6 +69,8 @@ async function handleGen(kv, request, body) {
   let prefix = String(body.prefix || 'GC').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
   if (!prefix) prefix = 'GC';
 
+  const projectKeys = normProjectKeys(body.projectKeys);
+  const projectKeys = normProjectKeys(body.projectKeys);
   const type = String(body.type || '通用券').slice(0, 40);
   const value = String(body.value || '').slice(0, 40);
   const note = String(body.note || '').slice(0, 200);
@@ -99,6 +102,7 @@ async function handleGen(kv, request, body) {
         code: norm,
         couponCode: display,
         status: 'active',
+        projectKeys: projectKeys,
         type: type,
         value: value,
         note: note,
@@ -234,6 +238,7 @@ export async function onRequestGet(context) {
       code: r.couponCode || r.code,
       norm: r.code,
       status: st,
+      projectKeys: Array.isArray(r.projectKeys) ? r.projectKeys : [],
       type: r.type || '',
       value: r.value || '',
       note: r.note || '',

@@ -1912,6 +1912,12 @@ td.check-col { width: 34px; text-align: center; }
             <label style="display:flex;flex-direction:column;gap:4px;font-size:12px">有效期（天，空=永久）
               <input id="cpExpDays" type="number" min="0" max="3650" style="width:150px;padding:6px 8px;border:1px solid #cbd5e1;border-radius:8px">
             </label>
+            <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;flex:1 1 100%">
+              <span>关联项目（不勾选 = 通用券，可在任意项目兑换；勾选后仅限所选项目兑换）</span>
+              <div id="cpProjects" style="display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+                <span style="color:#94a3b8">正在加载项目清单…</span>
+              </div>
+            </div>
             <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;flex:1 1 240px;min-width:200px">备注
               <input id="cpNote" placeholder="如 国庆活动赠券" maxlength="60" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:8px">
             </label>
@@ -4191,6 +4197,7 @@ td.check-col { width: 34px; text-align: center; }
     if (CP_STATE.bound) return;
     CP_STATE.bound = true;
     if ($('cpGenBtn')) $('cpGenBtn').addEventListener('click', cpGen);
+    cpLoadProjects();
     if ($('cpRefreshBtn')) $('cpRefreshBtn').addEventListener('click', function () { loadCoupons(); });
     if ($('cpSearchBtn')) $('cpSearchBtn').addEventListener('click', function () { loadCoupons(); });
     if ($('cpStatusSel')) $('cpStatusSel').addEventListener('change', function () { loadCoupons(); });
@@ -4289,6 +4296,46 @@ td.check-col { width: 34px; text-align: center; }
     });
   }
 
+  function cpPickedProjects() {
+    var box = $('cpProjects');
+    if (!box) return [];
+    var out = [];
+    Array.prototype.slice.call(box.querySelectorAll('input[type=checkbox]')).forEach(function (el) {
+      if (el.checked && el.value) out.push(el.value);
+    });
+    return out;
+  }
+
+  var CP_PROJECTS = null;
+  function cpLoadProjects() {
+    var box = $('cpProjects');
+    if (!box) return;
+    if (CP_PROJECTS) { cpRenderProjects(CP_PROJECTS); return; }
+    recRequest('/api/projects', { method: 'GET' }).then(function (data) {
+      if (!data || data.ok !== true || !Array.isArray(data.projects)) {
+        box.innerHTML = '<span style="color:#d9534f">项目清单加载失败，可手动留空（即通用券）</span>';
+        return;
+      }
+      CP_PROJECTS = data.projects;
+      cpRenderProjects(CP_PROJECTS);
+    }).catch(function () {
+      box.innerHTML = '<span style="color:#d9534f">项目清单加载失败，可手动留空（即通用券）</span>';
+    });
+  }
+
+  function cpRenderProjects(list) {
+    var box = $('cpProjects');
+    if (!box) return;
+    if (!list.length) { box.innerHTML = '<span style="color:#94a3b8">暂无项目</span>'; return; }
+    var picked = cpPickedProjects();
+    box.innerHTML = list.map(function (p) {
+      var on = picked.indexOf(p.key) >= 0 ? ' checked' : '';
+      return '<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer">' +
+        '<input type="checkbox" value="' + cpEsc(p.key) + '"' + on + '>' +
+        '<span>' + cpEsc(p.short || p.title || p.key) + '</span></label>';
+    }).join('');
+  }
+
   function cpGen() {
     var body = {
       action: 'gen',
@@ -4297,7 +4344,8 @@ td.check-col { width: 34px; text-align: center; }
       type: $('cpType') ? $('cpType').value : '通用券',
       value: $('cpValue') ? $('cpValue').value : '',
       note: $('cpNote') ? $('cpNote').value : '',
-      expDays: $('cpExpDays') ? Number($('cpExpDays').value || 0) : 0
+      expDays: $('cpExpDays') ? Number($('cpExpDays').value || 0) : 0,
+      projectKeys: cpPickedProjects()
     };
     if (!body.count || body.count < 1) { cpStatus('请填写生成数量', true); return; }
     var btn = $('cpGenBtn');

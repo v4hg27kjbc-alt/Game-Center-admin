@@ -1345,11 +1345,11 @@ td.check-col { width: 34px; text-align: center; }
       <a href="#" class="nav-item nav-primary-item" data-page="trialfb" data-role="owner,admin">内测反馈</a>
       <a href="#" class="nav-item nav-primary-item" data-page="coupons" data-role="owner,admin">券码管理</a>
       <a href="#" class="nav-item nav-primary-item" data-page="maint" data-role="owner,admin">维护控制</a>
-      <button type="button" class="nav-divider nav-more-toggle" id="navMoreToggle" aria-expanded="true" aria-controls="navMoreGroup" title="展开 / 收起更多功能">
+      <button type="button" class="nav-divider nav-more-toggle" id="navMoreToggle" aria-expanded="false" aria-controls="navMoreGroup" title="展开 / 收起更多功能">
         <span>更多</span>
         <svg class="nav-more-chev" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
       </button>
-      <div class="nav-more-group" id="navMoreGroup">
+      <div class="nav-more-group collapsed" id="navMoreGroup">
       <a href="#" class="nav-item" data-page="feedbacks" data-role="owner,admin">反馈管理</a>
       <a href="#" class="nav-item with-ic" data-page="recommendations" data-role="owner,admin"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.7 5.7 6.3 0.9-4.6 4.4 1.1 6.2L12 17.3 6.5 20.2l1.1-6.2L3 9.6l6.3-0.9L12 3z"/></svg>推荐机型</a>
       <a href="#" class="nav-item" data-page="notices" data-role="owner,admin">公告管理</a>
@@ -2998,6 +2998,22 @@ td.check-col { width: 34px; text-align: center; }
     }
     return [];
   }
+  /* 会话失效兜底：接口 401 时明确提示并引导重新登录（避免各页各自报「管理员无有效令牌」） */
+  var __authLostAt = 0;
+  function authLostNotice() {
+    var now = Date.now();
+    if (now - __authLostAt < 8000) return;
+    __authLostAt = now;
+    try {
+      var mp = $('mainPage');
+      if (mp && !mp.classList.contains('hidden')) {
+        if (window.confirm('登录状态已失效（管理员会话无有效令牌）。\n点击「确定」回到登录页重新登录。')) {
+          location.reload();
+        }
+      }
+    } catch (e) {}
+  }
+
   function recRequest(path, opts) {
     opts = opts || {};
     var headers = { 'Accept': 'application/json' };
@@ -3013,6 +3029,7 @@ td.check-col { width: 34px; text-align: center; }
         var data = null;
         try { data = txt ? JSON.parse(txt) : null; } catch (e) { data = null; }
         if (!res.ok) {
+          if (res.status === 401) authLostNotice();
           var em = (data && (data.error || data.message)) ? (data.error || data.message) : ('HTTP ' + res.status);
           var err = new Error(em);
           err.status = res.status;
@@ -6282,7 +6299,7 @@ td.check-col { width: 34px; text-align: center; }
     if (!btn || !group) return;
     var saved = null;
     try { saved = localStorage.getItem('mv_nav_more'); } catch (e) {}
-    var open = saved !== '0';
+    var open = saved === '1';
     function apply(v) {
       btn.setAttribute('aria-expanded', v ? 'true' : 'false');
       if (v) group.classList.remove('collapsed'); else group.classList.add('collapsed');

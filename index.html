@@ -1307,6 +1307,8 @@ td.check-col { width: 34px; text-align: center; }
   .sidebar .nav { overflow-y: auto; max-height: calc(100vh - 96px); overflow-x: hidden; }
   .sidebar .nav::-webkit-scrollbar { width: 6px; }
   .sidebar .nav::-webkit-scrollbar-thumb { background: rgba(120,140,180,.35); border-radius: 3px; }
+  .sidebar-brand .brand-ver { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; letter-spacing: .3px; vertical-align: middle; color: #dbeafe; background: rgba(59,130,246,.28); border: 1px solid rgba(147,197,253,.45); }
+  body.theme-light .sidebar-brand .brand-ver { color: #1d4ed8; background: #e0ecff; border-color: #bfdbfe; }
 </style>
 </head>
 <body>
@@ -1333,7 +1335,7 @@ td.check-col { width: 34px; text-align: center; }
 <!-- 主界面 -->
 <div id="mainPage" class="main-page hidden">
   <aside class="sidebar">
-    <div class="sidebar-brand">✈ 后台管理</div>
+    <div class="sidebar-brand">✈ 后台管理<span class="brand-ver" title="已同步主站 v3.2 能力">v3.2</span></div>
     <nav class="nav">
       <a href="#" class="nav-item active" data-page="dashboard">数据看板</a>
       <a href="#" class="nav-item nav-primary-item" data-page="sms" data-role="owner,admin">📨 收发</a>
@@ -2070,6 +2072,20 @@ td.check-col { width: 34px; text-align: center; }
         </div>
         <div id="kimiBalModels" class="sub-note"></div>
         <div id="kimiBalStatus" class="list-status"></div>
+        <div class="table-card">
+          <div class="toolbar-title" style="font-size:14px">主站 AI 能力与配额（已同步 v3.2）</div>
+          <table class="table">
+            <thead><tr><th>项目</th><th>当前口径</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td>kimi-k3.1-pro</td><td>登录用户每日 2 次</td><td>旗舰模型，按账号维度（uid）计额度，与访客额度隔离</td></tr>
+              <tr><td>kimi-k3</td><td>访客每日 5 次</td><td>未登录/未解锁访客走访客维度额度</td></tr>
+              <tr><td>BYOK 自带密钥</td><td>不占额度</td><td>用户填自有 Key 时，请求直连上游、不扣配额、不读写共享缓存</td></tr>
+              <tr><td>云端聊天记录</td><td>每账号 200 会话 / 200 条消息</td><td>主站个人中心「AI 高级设置」开关，KV 存 chat:&lt;uid&gt;:&lt;convId&gt;</td></tr>
+              <tr><td>付费订单兑换码</td><td>一次性展示</td><td>首次在读取页展示后标记已展示，后台订单页可见「已展示/未展示」</td></tr>
+            </tbody>
+          </table>
+          <p class="settings-note">配额如需调整，改主站 <code>functions/api/_lib/quota.js</code> 中 DEFAULT_PRO_DAILY_LIMIT / K3 相关常量后重新部署；后台无需改动。</p>
+        </div>
         <div class="toolbar">
           <div class="settings-row">
             <button id="tokenRefreshBtn" class="btn btn-primary" type="button">刷新用量</button>

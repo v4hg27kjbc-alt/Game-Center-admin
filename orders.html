@@ -36,6 +36,7 @@
 <body>
 <h1>付费订单</h1>
 <p class="sub">波音737 报告 · ¥5 爱发电订单 · 核对到账后点「确认开通」，系统自动发券（关联 b737 项目）</p>
+<p class="sub" style="margin-top:-8px">兑换码仅在用户端「读取页」首次展示一次，展示后即标记「已展示」，再次访问只显示脱敏码</p>
 
 <div class="stats">
   <div class="stat warn"><span>待确认</span><b id="sPending">-</b></div>
@@ -81,6 +82,18 @@ function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'
 function fmt(ts){ if(!ts) return '-'; var d=new Date(ts); if(isNaN(d)) return ts;
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
 
+/* 券码单元格：码 + 一次性展示状态（已展示 / 未展示 / 未生成） */
+function couponCell(o){
+  var code = o.couponCode || '';
+  if(!code){
+    return '<span style="color:#94a3b8">未生成</span>';
+  }
+  var tag = o.revealed
+    ? '<span class="pill p-confirmed" title="' + esc(fmt(o.revealedAt)) + '">已展示</span>'
+    : '<span class="pill p-pending">未展示</span>';
+  return esc(code) + ' ' + tag;
+}
+
 function load(){
   var st = $('filter').value;
   fetch('/api/order?action=list&limit=200' + (st ? '&status=' + st : ''), { credentials: 'include', cache: 'no-store' })
@@ -102,7 +115,7 @@ function load(){
           : (o.status === 'confirmed' ? '<button class="gray" data-id="'+esc(o.id)+'" data-act="confirm" disabled>已完成</button>' : '<button class="gray" data-id="'+esc(o.id)+'" data-act="confirm">重新开通</button>');
         return '<tr><td class="mono">'+esc(o.id)+'</td><td>'+esc(o.contact)+'</td><td class="mono">'+esc(o.afdianOrder||'-')+'</td><td>¥'+esc(o.price)+'</td>'
           +'<td><span class="pill '+cls+'">'+label+'</span></td><td class="mono">'+fmt(o.createdAt)+'</td>'
-          +'<td class="mono">'+esc(o.couponCode||'-')+'</td><td>'+ops+'</td></tr>';
+          +'<td class="mono">'+couponCell(o)+'</td><td>'+ops+'</td></tr>';
       }).join('');
     }).catch(function(){ $('rows').innerHTML = '<tr><td colspan="8" class="empty">网络异常</td></tr>'; });
 }

@@ -1298,6 +1298,15 @@ td.check-col { width: 34px; text-align: center; }
   .stack-chart { gap: 4px; }
   .fb-detail-meta { flex-direction: column; gap: 4px; }
 }
+  /* 「更多」分组：可折叠，默认展开，保证所有功能一眼可见 */
+  .nav-more-toggle { display: flex; align-items: center; gap: 6px; width: 100%; background: none; border: 0; cursor: pointer; font: inherit; text-align: left; }
+  .nav-more-toggle .nav-more-chev { transition: transform .18s ease; opacity: .75; flex: 0 0 auto; }
+  .nav-more-toggle:hover { color: var(--text); }
+  .nav-more-toggle[aria-expanded="false"] .nav-more-chev { transform: rotate(-90deg); }
+  .nav-more-group.collapsed { display: none; }
+  .sidebar .nav { overflow-y: auto; max-height: calc(100vh - 96px); overflow-x: hidden; }
+  .sidebar .nav::-webkit-scrollbar { width: 6px; }
+  .sidebar .nav::-webkit-scrollbar-thumb { background: rgba(120,140,180,.35); border-radius: 3px; }
 </style>
 </head>
 <body>
@@ -1334,7 +1343,11 @@ td.check-col { width: 34px; text-align: center; }
       <a href="#" class="nav-item nav-primary-item" data-page="trialfb" data-role="owner,admin">内测反馈</a>
       <a href="#" class="nav-item nav-primary-item" data-page="coupons" data-role="owner,admin">券码管理</a>
       <a href="#" class="nav-item nav-primary-item" data-page="maint" data-role="owner,admin">维护控制</a>
-      <span class="nav-divider">更多</span>
+      <button type="button" class="nav-divider nav-more-toggle" id="navMoreToggle" aria-expanded="true" aria-controls="navMoreGroup" title="展开 / 收起更多功能">
+        <span>更多</span>
+        <svg class="nav-more-chev" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="nav-more-group" id="navMoreGroup">
       <a href="#" class="nav-item" data-page="feedbacks" data-role="owner,admin">反馈管理</a>
       <a href="#" class="nav-item with-ic" data-page="recommendations" data-role="owner,admin"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.7 5.7 6.3 0.9-4.6 4.4 1.1 6.2L12 17.3 6.5 20.2l1.1-6.2L3 9.6l6.3-0.9L12 3z"/></svg>推荐机型</a>
       <a href="#" class="nav-item" data-page="notices" data-role="owner,admin">公告管理</a>
@@ -1344,6 +1357,7 @@ td.check-col { width: 34px; text-align: center; }
       <a href="#" class="nav-item" data-page="ops" data-role="owner,admin">运营选题</a>
       <a href="#" class="nav-item" data-page="vault" data-role="owner,admin">密钥保险柜</a>
       <a href="#" class="nav-item" data-page="settings" data-role="owner,admin">系统设置</a>
+      </div>
     </nav>
   </aside>
   <div class="main-wrap">
@@ -1983,7 +1997,7 @@ td.check-col { width: 34px; text-align: center; }
       <section id="page-vault" class="page hidden">
         <div class="toolbar">
           <div class="toolbar-title">密钥保险柜</div>
-          <p class="sub-note">存放 API 令牌、密钥与常用链接（仅保存在本机浏览器 localStorage，不会上传）。支持打开、获取、一键复制。</p>
+          <p class="sub-note">存放 API 令牌、密钥与常用链接。<b>数据加密后保存在云端</b>（AES-256-GCM），换设备、清缓存都不会丢；列表只显示掩码，点「获取」才读取明文。支持一键复制与打开链接。</p>
         </div>
         <div class="card">
           <div class="toolbar-title" style="font-size:14px">添加记录</div>
@@ -2010,6 +2024,7 @@ td.check-col { width: 34px; text-align: center; }
               <input type="text" id="vaultNoteInput" class="input" placeholder="用途说明" autocomplete="off">
             </div>
             <button id="vaultAddBtn" class="btn btn-primary" type="button" onclick="vaultAdd()">添加</button>
+            <button id="vaultMigrateBtn" class="btn btn-ghost" type="button" onclick="vaultMigrate()" title="把旧版存在本机浏览器里的记录导入云端">导入本机旧数据</button>
           </div>
         </div>
         <div class="table-card">
@@ -2597,7 +2612,7 @@ td.check-col { width: 34px; text-align: center; }
     if (name === 'usercontrol') loadUserControl();
     if (name === 'trash') renderTrash();
     if (name === 'sites') renderSites();
-    if (name === 'vault') renderVault();
+    if (name === 'vault') vaultLoad();
     if (name === 'settings') renderSettings();
   }
 
@@ -6115,11 +6130,41 @@ td.check-col { width: 34px; text-align: center; }
     alert(ok ? '已通过并生成令牌' : '已驳回');
   }
 
-  // ===== 密钥保险柜 =====
-  function vaultList() {
-    if (!db.vault) db.vault = [];
-    return db.vault;
+  // ===== 侧栏「更多」分组展开 / 收起 =====
+  (function initNavMore() {
+    var btn = $('navMoreToggle'), group = $('navMoreGroup');
+    if (!btn || !group) return;
+    var saved = null;
+    try { saved = localStorage.getItem('mv_nav_more'); } catch (e) {}
+    var open = saved !== '0';
+    function apply(v) {
+      btn.setAttribute('aria-expanded', v ? 'true' : 'false');
+      if (v) group.classList.remove('collapsed'); else group.classList.add('collapsed');
+      try { localStorage.setItem('mv_nav_more', v ? '1' : '0'); } catch (e) {}
+    }
+    apply(open);
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      apply(btn.getAttribute('aria-expanded') !== 'true');
+    });
+  })();
+
+  // ===== 密钥保险柜（服务端加密存储，跨设备可用）=====
+  var vaultCache = [];
+  function vaultList() { return vaultCache; }
+
+  function vaultLoad() {
+    var body = $('vaultBody');
+    return recRequest('/api/vault?action=list').then(function (d) {
+      vaultCache = (d && d.items) ? d.items : [];
+      renderVault();
+      return vaultCache;
+    }).catch(function (e) {
+      if (body) body.innerHTML = '<tr><td colspan="6" style="color:var(--text-dim)">加载失败：' + esc(e.message || '接口不可用') + '（请确认已登录后台）</td></tr>';
+      return [];
+    });
   }
+
   function vaultAdd() {
     var name = $('vaultNameInput').value.trim();
     var type = $('vaultTypeSelect').value;
@@ -6127,72 +6172,115 @@ td.check-col { width: 34px; text-align: center; }
     var note = $('vaultNoteInput').value.trim();
     if (!name) { alert('请填写名称'); return; }
     if (!value) { alert('请填写令牌/密钥/链接内容'); return; }
-    vaultList().unshift({ id: genId(), name: name, type: type, value: value, note: note, time: nowStr() });
-    saveDB();
-    $('vaultNameInput').value = '';
-    $('vaultValueInput').value = '';
-    $('vaultNoteInput').value = '';
-    renderVault();
+    var btn = $('vaultAddBtn'); if (btn) btn.disabled = true;
+    recRequest('/api/vault', { method: 'POST', body: { action: 'add', name: name, type: type, value: value, note: note } })
+      .then(function (d) {
+        $('vaultNameInput').value = '';
+        $('vaultValueInput').value = '';
+        $('vaultNoteInput').value = '';
+        if (d && d.duplicate) alert('该条已存在，未重复添加');
+        return vaultLoad();
+      })
+      .catch(function (e) { alert('保存失败：' + (e.message || '接口不可用')); })
+      .then(function () { if (btn) btn.disabled = false; });
   }
-  function vaultMask(v) {
-    if (!v) return '—';
-    if (v.indexOf('http') === 0) return v.replace(/^(.{0,28}).*$/, '$1…');
-    return v.slice(0, 6) + '••••••' + v.slice(-4);
+
+  function vaultGetValue(id) {
+    return recRequest('/api/vault', { method: 'POST', body: { action: 'reveal', id: id } }).then(function (d) {
+      return String((d && d.value) || '');
+    });
   }
-  function vaultCopy(i) {
-    var item = vaultList()[i];
-    if (!item) return;
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(item.value).then(function () {
-        alert('已复制：' + item.name);
-      }, function () { fallbackCopy(item.value, item.name); });
-    } else fallbackCopy(item.value, item.name);
-  }
+
   function fallbackCopy(txt, label) {
     var ta = document.createElement('textarea');
     ta.value = txt; document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); alert('已复制：' + label); } catch (e) { alert('复制失败，完整内容：\n' + txt); }
+    try { document.execCommand('copy'); alert(label); } catch (e) { alert('复制失败，完整内容：\n' + txt); }
     document.body.removeChild(ta);
   }
+
+  function copyText(txt, label) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(function () { alert(label); }, function () { fallbackCopy(txt, label); });
+    } else fallbackCopy(txt, label);
+  }
+
+  function vaultCopy(i) {
+    var item = vaultList()[i];
+    if (!item) return;
+    vaultGetValue(item.id).then(function (v) { copyText(v, '已复制：' + item.name); })
+      .catch(function (e) { alert('读取失败：' + (e.message || '接口不可用')); });
+  }
+
   function vaultOpen(i) {
     var item = vaultList()[i];
     if (!item) return;
-    if (item.value.indexOf('http://') === 0 || item.value.indexOf('https://') === 0) {
-      window.open(item.value, '_blank');
-    } else {
-      alert(item.name + ' 不是链接，无法打开\n完整值：\n' + item.value);
-    }
+    vaultGetValue(item.id).then(function (v) {
+      if (/^https?:\/\//i.test(v)) window.open(v, '_blank');
+      else alert(item.name + ' 不是链接，无法打开\n完整值：\n' + v);
+    }).catch(function (e) { alert('读取失败：' + (e.message || '')); });
   }
+
   function vaultReveal(i) {
     var item = vaultList()[i];
     if (!item) return;
-    var v = prompt(item.name + ' 的完整内容（复制后请关闭）：', item.value);
-    if (v !== null && v !== item.value) {
-      item.value = v; saveDB(); renderVault();
-    }
+    vaultGetValue(item.id).then(function (v) {
+      var nv = prompt(item.name + ' 的完整内容（可直接编辑后确定保存）：', v);
+      if (nv === null) return;
+      if (nv === v) return;
+      recRequest('/api/vault', { method: 'POST', body: { action: 'update', id: item.id, value: nv } })
+        .then(function () { return vaultLoad(); })
+        .catch(function (e) { alert('保存失败：' + (e.message || '')); });
+    }).catch(function (e) { alert('读取失败：' + (e.message || '')); });
   }
+
   function vaultDelete(i) {
     var item = vaultList()[i];
     if (!item) return;
-    if (!confirm('确定删除「' + item.name + '」？')) return;
-    vaultList().splice(i, 1);
-    saveDB(); renderVault();
+    if (!confirm('确定删除「' + item.name + '」？删除后不可恢复。')) return;
+    recRequest('/api/vault', { method: 'POST', body: { action: 'delete', id: item.id } })
+      .then(function () { return vaultLoad(); })
+      .catch(function (e) { alert('删除失败：' + (e.message || '')); });
   }
+
+  function vaultMigrate() {
+    var old = [];
+    try {
+      var raw = window.localStorage.getItem(DB_KEY);
+      var parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && Array.isArray(parsed.vault)) old = parsed.vault;
+    } catch (e) { old = []; }
+    if (!old.length) { alert('本机没有可导入的旧记录'); return; }
+    if (!confirm('将把本机浏览器里保存的 ' + old.length + ' 条记录加密上传到云端，继续？')) return;
+    var items = old.map(function (v) { return { name: v.name, type: v.type, value: v.value, note: v.note }; });
+    recRequest('/api/vault', { method: 'POST', body: { action: 'migrate', items: items } })
+      .then(function (d) {
+        alert('导入完成：新增 ' + ((d && d.added) || 0) + ' 条，跳过重复 ' + ((d && d.skipped) || 0) + ' 条');
+        return vaultLoad();
+      })
+      .catch(function (e) { alert('导入失败：' + (e.message || '')); });
+  }
+
+  function vaultTime(t) {
+    var s = String(t || '');
+    if (s.length >= 16) return s.slice(0, 10) + ' ' + s.slice(11, 16);
+    return s || '—';
+  }
+
   function renderVault() {
     var list = vaultList();
     var body = $('vaultBody');
     var empty = $('vaultEmpty');
+    if (!body) return;
     if (!list.length) { body.innerHTML = ''; if (empty) empty.classList.remove('hidden'); return; }
     if (empty) empty.classList.add('hidden');
     body.innerHTML = list.map(function (v, i) {
-      var typeTxt = { token: 'API 令牌', secret: '密钥/密码', link: '链接', other: '其他' }[v.type] || v.type;
-      var valTxt = esc(vaultMask(v.value));
+      var typeTxt = { token: 'API 令牌', secret: '密钥/密码', link: '链接', other: '其他' }[v.type] || v.type || '其他';
       return '<tr>'
         + '<td style="font-weight:500">' + esc(v.name) + '</td>'
-        + '<td><span class="chip" style="font-size:12px">' + typeTxt + '</span></td>'
-        + '<td style="font-family:monospace;font-size:12px">' + valTxt + '</td>'
+        + '<td><span class="chip" style="font-size:12px">' + esc(typeTxt) + '</span></td>'
+        + '<td style="font-family:monospace;font-size:12px">' + esc(v.mask || '—') + '</td>'
         + '<td>' + esc(v.note || '—') + '</td>'
-        + '<td style="color:var(--text-dim);font-size:12px">' + esc(v.time) + '</td>'
+        + '<td style="color:var(--text-dim);font-size:12px">' + esc(vaultTime(v.updatedAt || v.createdAt)) + '</td>'
         + '<td>'
         + '<button class="btn btn-ghost btn-sm" type="button" onclick="vaultCopy(' + i + ')">复制</button> '
         + '<button class="btn btn-ghost btn-sm" type="button" onclick="vaultOpen(' + i + ')">打开</button> '

@@ -1332,6 +1332,7 @@ td.check-col { width: 34px; text-align: center; }
       <a href="#" class="nav-item nav-primary-item" data-page="users" data-role="owner,admin">用户管理</a>
       <a href="#" class="nav-item nav-primary-item" data-page="tempaccounts" data-role="owner,admin">临时账户</a>
       <a href="#" class="nav-item nav-primary-item" data-page="trialfb" data-role="owner,admin">内测反馈</a>
+      <a href="#" class="nav-item nav-primary-item" data-page="coupons" data-role="owner,admin">券码管理</a>
       <a href="#" class="nav-item nav-primary-item" data-page="maint" data-role="owner,admin">维护控制</a>
       <span class="nav-divider">更多</span>
       <a href="#" class="nav-item" data-page="feedbacks" data-role="owner,admin">反馈管理</a>
@@ -1859,6 +1860,82 @@ td.check-col { width: 34px; text-align: center; }
             <tbody id="tfFbTbody"></tbody>
           </table>
           <p id="tfFbEmpty" class="empty hidden">暂无评价</p>
+        </div>
+      </section>
+
+      <!-- 券码管理 -->
+      <section id="page-coupons" class="page hidden">
+        <div class="toolbar">
+          <div>
+            <div class="toolbar-title">券码管理</div>
+            <p class="sub-note">系统随机生成一次性券码（剔除 0/O/1/I 等易混字符），用户在主站「个人中心 → 我的券码」输入兑换，兑换即核销并绑定该账号，换设备登录即可同步查看。接口：后台 /api/coupons，主站 /api/coupon，数据存 SMS_KV（coupon:code:* / coupon:index:v1）。</p>
+          </div>
+        </div>
+        <div id="cpStatus" class="list-status"></div>
+
+        <div class="uc-stat-row">
+          <div class="uc-stat-card"><div class="uc-stat-num" id="cpTotalNum">0</div><div class="uc-stat-label">券码总数</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="cpActiveNum">0</div><div class="uc-stat-label">未使用</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="cpUsedNum">0</div><div class="uc-stat-label">已使用</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="cpRevokedNum">0</div><div class="uc-stat-label">已作废</div></div>
+        </div>
+
+        <div class="table-card" style="margin-bottom:16px">
+          <div class="toolbar-title" style="font-size:14px">生成券码</div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;margin:12px 0 4px">
+            <label style="display:flex;flex-direction:column;gap:4px;font-size:12px">前缀
+              <input id="cpPrefix" value="GC" maxlength="6" style="width:90px;padding:6px 8px;border:1px solid #cbd5e1;border-radius:8px">
+            </label>
+            <label style="display:flex;flex-direction:column;gap:4px;font-size:12px">数量
+              <input id="cpCount" type="number" min="1" max="200" value="10" style="width:90px;padding:6px 8px;border:1px solid #cbd5e1;border-radius:8px">
+            </label>
+            <label style="display:flex;flex-direction:column;gap:4px;font-size:12px">券类型
+              <input id="cpType" value="通用券" maxlength="20" style="width:130px;padding:6px 8px;border:1px solid #cbd5e1;border-radius:8px">
+            </label>
+            <label style="display:flex;flex-direction:column;gap:4px;font-size:12px">面值/权益
+              <input id="cpValue" placeholder="如 50 元 / 1 次" maxlength="20" style="width:130px;padding:6px 8px;border:1px solid #cbd5e1;border-radius:8px">
+            </label>
+            <label style="display:flex;flex-direction:column;gap:4px;font-size:12px">有效期（天，空=永久）
+              <input id="cpExpDays" type="number" min="0" max="3650" style="width:150px;padding:6px 8px;border:1px solid #cbd5e1;border-radius:8px">
+            </label>
+            <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;flex:1 1 240px;min-width:200px">备注
+              <input id="cpNote" placeholder="如 国庆活动赠券" maxlength="60" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:8px">
+            </label>
+          </div>
+          <div class="toolbar-actions" style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn btn-primary" id="cpGenBtn" type="button">生成券码</button>
+            <button class="btn btn-ghost" id="cpExportBtn" type="button">导出 CSV</button>
+          </div>
+          <div id="cpGenResult" style="margin-top:10px;font-size:12px;color:#475569;word-break:break-all"></div>
+        </div>
+
+        <div class="table-card">
+          <div class="toolbar-actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+            <input id="cpQuery" placeholder="搜索券码" maxlength="40" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:8px;width:180px">
+            <select id="cpStatusSel" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:8px">
+              <option value="all">全部状态</option>
+              <option value="active">未使用</option>
+              <option value="used">已使用</option>
+              <option value="revoked">已作废</option>
+              <option value="expired">已过期</option>
+            </select>
+            <button class="btn btn-ghost" id="cpSearchBtn" type="button">查询</button>
+            <button class="btn btn-ghost" id="cpRefreshBtn" type="button">刷新</button>
+            <span id="cpSelInfo" style="font-size:12px;color:#64748b">未选择</span>
+            <button class="btn btn-ghost" id="cpRevokeSelBtn" type="button">作废选中</button>
+            <button class="btn btn-ghost" id="cpDeleteSelBtn" type="button">删除选中</button>
+          </div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width:34px"><input type="checkbox" id="cpCheckAll"></th>
+                <th>券码</th><th>状态</th><th>类型</th><th>面值</th><th>备注</th>
+                <th>创建时间</th><th>过期时间</th><th>使用者</th><th>使用时间</th><th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="cpTbody"></tbody>
+          </table>
+          <p id="cpEmpty" class="empty hidden">暂无券码</p>
         </div>
       </section>
 
@@ -2494,7 +2571,7 @@ td.check-col { width: 34px; text-align: center; }
   function switchPage(name) {
     // 敏感面板前置身份验证（登录密码）
     if (typeof requireGate === 'function' && !requireGate(name)) return;
-    var pages = ['dashboard', 'sms', 'token', 'users', 'tempaccounts', 'trialfb', 'maint', 'feedbacks', 'recommendations', 'ops', 'notices', 'usercontrol', 'trash', 'vault', 'sites', 'settings'];
+    var pages = ['dashboard', 'sms', 'token', 'users', 'tempaccounts', 'trialfb', 'coupons', 'maint', 'feedbacks', 'recommendations', 'ops', 'notices', 'usercontrol', 'trash', 'vault', 'sites', 'settings'];
     for (var i = 0; i < pages.length; i++) {
       var pg = $('page-' + pages[i]);
       if (pg) pg.classList.toggle('hidden', pages[i] !== name);
@@ -2503,7 +2580,7 @@ td.check-col { width: 34px; text-align: center; }
     for (var j = 0; j < navs.length; j++) {
       navs[j].classList.toggle('active', navs[j].getAttribute('data-page') === name);
     }
-    var titles = { dashboard: '数据看板', sms: '收发模块', token: 'Token 用量', users: '用户管理', tempaccounts: '临时账户', trialfb: '内测反馈', maint: '维护控制', feedbacks: '反馈管理', recommendations: '推荐机型', ops: '运营选题', notices: '公告管理', usercontrol: '航站服务台', trash: '回收站', vault: '密钥保险柜', sites: '站点管理', settings: '系统设置' };
+    var titles = { dashboard: '数据看板', sms: '收发模块', token: 'Token 用量', users: '用户管理', tempaccounts: '临时账户', trialfb: '内测反馈', coupons: '券码管理', maint: '维护控制', feedbacks: '反馈管理', recommendations: '推荐机型', ops: '运营选题', notices: '公告管理', usercontrol: '航站服务台', trash: '回收站', vault: '密钥保险柜', sites: '站点管理', settings: '系统设置' };
     $('pageTitle').textContent = titles[name] || '';
     if (name === 'dashboard') { loadStats(); renderTrend(); renderRecent(); renderNotes(); refreshLivePanels(); }
     if (name === 'sms') renderSmsPage();
@@ -2511,6 +2588,7 @@ td.check-col { width: 34px; text-align: center; }
     if (name === 'users') renderUsersPage();
     if (name === 'tempaccounts') loadTempAccounts();
     if (name === 'trialfb') loadTrialFeedback();
+    if (name === 'coupons') loadCoupons();
     if (name === 'maint') renderMaintPage();
     if (name === 'feedbacks') loadFeedbacks();
     if (name === 'recommendations') loadRecommendations(false);
@@ -4045,6 +4123,240 @@ td.check-col { width: 34px; text-align: center; }
     return String(v === undefined || v === null ? '' : v)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
+  // ===== 券码管理 =====
+  var CP_STATE = { rows: [], bound: false };
+
+  function cpStatus(msg, isErr) {
+    var el = $('cpStatus');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.style.color = isErr ? '#b91c1c' : '';
+  }
+  function cpEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+  function cpFmt(t) {
+    if (!t) return '—';
+    var d = new Date(t);
+    if (isNaN(d.getTime())) return String(t).slice(0, 16);
+    try { return d.toLocaleString('zh-CN', { hour12: false }); } catch (e) { return String(t).slice(0, 16); }
+  }
+  function cpStateLabel(st) {
+    var m = { active: '未使用', used: '已使用', revoked: '已作废', expired: '已过期' };
+    return m[st] || String(st || '');
+  }
+  function cpStateColor(st) {
+    var m = { active: '#15803d', used: '#1d4ed8', revoked: '#b91c1c', expired: '#b45309' };
+    return m[st] || '#334155';
+  }
+  function cpDiffDays(a, b) {
+    var d1 = new Date(a || '').setHours(0, 0, 0, 0);
+    var d2 = new Date(b || '').setHours(0, 0, 0, 0);
+    if (!Number.isFinite(d1) || !Number.isFinite(d2)) return 0;
+    return Math.round((d1 - d2) / 86400000);
+  }
+  function cpSelInfo() {
+    var el = $('cpSelInfo');
+    if (!el) return;
+    var n = document.querySelectorAll('.cp-pick:checked').length;
+    el.textContent = n ? ('已选择 ' + n + ' 张') : '未选择';
+  }
+  function cpPicked() {
+    var out = [];
+    Array.prototype.forEach.call(document.querySelectorAll('.cp-pick:checked'), function (cb) {
+      var v = cb.getAttribute('data-norm');
+      if (v) out.push(v);
+    });
+    return out;
+  }
+
+  function cpBind() {
+    if (CP_STATE.bound) return;
+    CP_STATE.bound = true;
+    if ($('cpGenBtn')) $('cpGenBtn').addEventListener('click', cpGen);
+    if ($('cpRefreshBtn')) $('cpRefreshBtn').addEventListener('click', function () { loadCoupons(); });
+    if ($('cpSearchBtn')) $('cpSearchBtn').addEventListener('click', function () { loadCoupons(); });
+    if ($('cpStatusSel')) $('cpStatusSel').addEventListener('change', function () { loadCoupons(); });
+    if ($('cpQuery')) $('cpQuery').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); loadCoupons(); }
+    });
+    if ($('cpRevokeSelBtn')) $('cpRevokeSelBtn').addEventListener('click', function () { cpBatch('revoke'); });
+    if ($('cpDeleteSelBtn')) $('cpDeleteSelBtn').addEventListener('click', function () { cpBatch('delete'); });
+    if ($('cpExportBtn')) $('cpExportBtn').addEventListener('click', cpExport);
+    if ($('cpCheckAll')) $('cpCheckAll').addEventListener('change', function () {
+      var on = $('cpCheckAll').checked;
+      Array.prototype.forEach.call(document.querySelectorAll('.cp-pick'), function (cb) { cb.checked = on; });
+      cpSelInfo();
+    });
+    if ($('cpTbody')) {
+      $('cpTbody').addEventListener('click', function (e) {
+        var t = e.target;
+        var btn = (t && t.closest) ? t.closest('button[data-act]') : null;
+        if (!btn) return;
+        var act = btn.getAttribute('data-act') || '';
+        var norm = btn.getAttribute('data-norm') || '';
+        if (act === 'revoke') cpBatch('revoke', [norm]);
+        else if (act === 'delete') cpBatch('delete', [norm]);
+        else if (act === 'copy') {
+          try {
+            navigator.clipboard.writeText(btn.getAttribute('data-code') || '');
+            cpStatus('已复制券码 ' + (btn.getAttribute('data-code') || ''));
+          } catch (er) {
+            cpStatus('复制失败，请手动选中复制', true);
+          }
+        }
+      });
+      $('cpTbody').addEventListener('change', function (e) {
+        var t = e.target;
+        if (t && t.classList && t.classList.contains('cp-pick')) cpSelInfo();
+      });
+    }
+  }
+
+  function cpRender(rows) {
+    var tb = $('cpTbody');
+    var empty = $('cpEmpty');
+    if (!tb) return;
+    tb.innerHTML = '';
+    if (!rows.length) {
+      if (empty) empty.classList.remove('hidden');
+      cpSelInfo();
+      return;
+    }
+    if (empty) empty.classList.add('hidden');
+    var html = rows.map(function (r) {
+      var canOp = (r.status !== 'used');
+      return '<tr>' +
+        '<td><input type="checkbox" class="cp-pick" data-norm="' + cpEsc(r.norm) + '"></td>' +
+        '<td><b style="letter-spacing:.6px">' + cpEsc(r.code) + '</b></td>' +
+        '<td style="color:' + cpStateColor(r.status) + ';font-weight:700">' + cpEsc(cpStateLabel(r.status)) + '</td>' +
+        '<td>' + cpEsc(r.type || '—') + '</td>' +
+        '<td>' + cpEsc(r.value || '—') + '</td>' +
+        '<td style="max-width:180px;white-space:normal">' + cpEsc(r.note || '—') + '</td>' +
+        '<td style="white-space:nowrap">' + cpEsc(cpFmt(r.createdAt)) + '</td>' +
+        '<td style="white-space:nowrap">' + (r.exp ? cpEsc(cpFmt(r.exp)) : '永久') + '</td>' +
+        '<td>' + (r.usedByName ? cpEsc(r.usedByName) : '—') + (r.usedBy ? '<br><span style="font-size:11px;color:#94a3b8">' + cpEsc(r.usedBy) + '</span>' : '') + '</td>' +
+        '<td style="white-space:nowrap">' + (r.usedAt ? cpEsc(cpFmt(r.usedAt)) : '—') + '</td>' +
+        '<td style="white-space:nowrap">' +
+          '<button class="btn btn-sm btn-ghost" data-act="copy" data-code="' + cpEsc(r.code) + '" type="button">复制</button> ' +
+          (canOp ? '<button class="btn btn-sm btn-ghost" data-act="revoke" data-norm="' + cpEsc(r.norm) + '" type="button">作废</button> ' : '') +
+          '<button class="btn btn-sm btn-ghost" data-act="delete" data-norm="' + cpEsc(r.norm) + '" type="button">删除</button>' +
+        '</td>' +
+        '</tr>';
+    }).join('');
+    tb.innerHTML = html;
+    if ($('cpCheckAll')) $('cpCheckAll').checked = false;
+    cpSelInfo();
+  }
+
+  function loadCoupons() {
+    cpBind();
+    var url = '/api/coupons?action=list&limit=500';
+    var st = $('cpStatusSel') ? String($('cpStatusSel').value || 'all') : 'all';
+    if (st && st !== 'all') url += '&status=' + encodeURIComponent(st);
+    var q = $('cpQuery') ? String($('cpQuery').value || '').trim() : '';
+    if (q) url += '&q=' + encodeURIComponent(q);
+    cpStatus('加载中…');
+    recRequest(url, { method: 'GET' }).then(function (data) {
+      if (!data || data.ok !== true) { cpStatus((data && data.message) || '加载失败', true); return; }
+      var s = data.stats || {};
+      if ($('cpTotalNum')) $('cpTotalNum').textContent = String(s.total || 0);
+      if ($('cpActiveNum')) $('cpActiveNum').textContent = String(s.active || 0);
+      if ($('cpUsedNum')) $('cpUsedNum').textContent = String(s.used || 0);
+      if ($('cpRevokedNum')) $('cpRevokedNum').textContent = String(s.revoked || 0);
+      CP_STATE.rows = data.rows || [];
+      cpRender(CP_STATE.rows);
+      cpStatus('共 ' + (data.total || 0) + ' 张，当前显示 ' + CP_STATE.rows.length + ' 张（未使用中过期券计入过期）');
+    }).catch(function (err) {
+      cpStatus('加载失败：' + ((err && err.message) || '网络异常'), true);
+    });
+  }
+
+  function cpGen() {
+    var body = {
+      action: 'gen',
+      prefix: $('cpPrefix') ? $('cpPrefix').value : 'GC',
+      count: $('cpCount') ? Number($('cpCount').value || 0) : 10,
+      type: $('cpType') ? $('cpType').value : '通用券',
+      value: $('cpValue') ? $('cpValue').value : '',
+      note: $('cpNote') ? $('cpNote').value : '',
+      expDays: $('cpExpDays') ? Number($('cpExpDays').value || 0) : 0
+    };
+    if (!body.count || body.count < 1) { cpStatus('请填写生成数量', true); return; }
+    var btn = $('cpGenBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '生成中…'; }
+    cpStatus('正在生成券码…');
+    recRequest('/api/coupons', { method: 'POST', body: body }).then(function (data) {
+      if (btn) { btn.disabled = false; btn.textContent = '生成券码'; }
+      if (!data || data.ok !== true) { cpStatus((data && data.message) || '生成失败', true); return; }
+      var codes = (data.coupons || []).map(function (c) { return c.couponCode || c.code; });
+      var box = $('cpGenResult');
+      if (box) box.innerHTML = '<b>本次生成 ' + (data.count || codes.length) + ' 张（批次 ' + cpEsc(data.batch || '') + '）：</b><br>' + codes.map(cpEsc).join('　');
+      cpStatus('生成成功 ' + (data.count || codes.length) + ' 张券码');
+      loadCoupons();
+    }).catch(function (err) {
+      if (btn) { btn.disabled = false; btn.textContent = '生成券码'; }
+      cpStatus('生成失败：' + ((err && err.message) || '网络异常'), true);
+    });
+  }
+
+  function cpBatch(mode, codesParam) {
+    var codes = codesParam && codesParam.length ? codesParam : cpPicked();
+    if (!codes.length) { cpStatus('请先勾选券码', true); return; }
+    var isDel = mode === 'delete';
+    var force = false;
+    if (isDel) {
+      var used = CP_STATE.rows.filter(function (r) {
+        return r.status === 'used' && codes.indexOf(r.norm) >= 0;
+      });
+      if (used.length) {
+        if (!confirm('选中的 ' + used.length + ' 张券码已被使用，删除后兑换记录不可追溯。确认强制删除 ' + codes.length + ' 张？')) return;
+        force = true;
+      } else if (!confirm('确认删除 ' + codes.length + ' 张券码？删除后不可恢复，用户将无法再兑换这些券码。')) {
+        return;
+      }
+    } else if (!confirm('确认作废 ' + codes.length + ' 张券码？作废后用户无法兑换，记录保留可查。')) {
+      return;
+    }
+    cpStatus((isDel ? '删除中…' : '作废中…'));
+    recRequest('/api/coupons', { method: 'POST', body: { action: mode, codes: codes, force: force } }).then(function (data) {
+      if (!data || data.ok !== true) { cpStatus((data && data.message) || '操作失败', true); return; }
+      var done = (data.done || []).length;
+      var skip = (data.skipped || []).length;
+      var msg = (isDel ? '已删除 ' : '已作废 ') + done + ' 张';
+      if (skip) msg += '，跳过 ' + skip + ' 张（' + (data.skipped || []).map(function (s) { return s.code + '：' + s.reason; }).join('；') + '）';
+      cpStatus(msg, skip > 0);
+      loadCoupons();
+    }).catch(function (err) {
+      cpStatus('操作失败：' + ((err && err.message) || '网络异常'), true);
+    });
+  }
+
+  function cpExport() {
+    var rows = CP_STATE.rows.slice();
+    if (!rows.length) { cpStatus('当前没有可导出的券码', true); return; }
+    var head = ['券码', '状态', '类型', '面值', '备注', '批次', '创建时间', '过期时间', '使用者UID', '使用者', '使用时间'];
+    var lines = [head.join(',')];
+    rows.forEach(function (r) {
+      var cells = [r.code, cpStateLabel(r.status), r.type, r.value, r.note, r.batch,
+        cpFmt(r.createdAt), r.exp ? cpFmt(r.exp) : '永久', r.usedBy, r.usedByName, r.usedAt ? cpFmt(r.usedAt) : ''];
+      lines.push(cells.map(function (v) {
+        var s = String(v == null ? '' : v).replace(/"/g, '""');
+        return '"' + s + '"';
+      }).join(','));
+    });
+    var blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'coupons_' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    cpStatus('已导出 ' + rows.length + ' 张券码');
+  }
+
   function loadTrialFeedback() {
     tfStatus('加载中…');
     recRequest('/api/trial-feedback?limit=100', { method: 'GET' }).then(function (data) {

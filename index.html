@@ -2054,6 +2054,23 @@ td.check-col { width: 34px; text-align: center; }
         </div>
         <div id="tokenStatus" class="list-status"></div>
         <div class="toolbar">
+          <div>
+            <div class="toolbar-title" style="font-size:14px">Kimi 账户真实余额</div>
+            <p class="sub-note">直接读取 Moonshot 官方接口 <code>/v1/users/me/balance</code>，非本地估算</p>
+          </div>
+          <div class="settings-row">
+            <button id="kimiBalRefresh" class="btn btn-ghost" type="button">刷新余额</button>
+          </div>
+        </div>
+        <div class="token-stat-grid">
+          <div class="uc-stat-card"><div class="uc-stat-num" id="kimiBalAvail">—</div><div class="uc-stat-label">可用余额（元）</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="kimiBalVoucher">—</div><div class="uc-stat-label">代金券余额（元）</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="kimiBalCash">—</div><div class="uc-stat-label">现金余额（元）</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="kimiBalState">—</div><div class="uc-stat-label">账户状态</div></div>
+        </div>
+        <div id="kimiBalModels" class="sub-note"></div>
+        <div id="kimiBalStatus" class="list-status"></div>
+        <div class="toolbar">
           <div class="settings-row">
             <button id="tokenRefreshBtn" class="btn btn-primary" type="button">刷新用量</button>
             <button id="tokenKimiBtn" class="btn btn-ghost" type="button">🚀 一键进入 Kimi 知识库问答</button>
@@ -3750,6 +3767,71 @@ td.check-col { width: 34px; text-align: center; }
     try { window.open('https://kimi.moonshot.cn/', '_blank'); } catch (e) {}
     tokStatus('已打开 Kimi 快捷入口（知识库问答区）');
   }
+
+  // ===== Kimi 真实余额（读取 Moonshot 官方 /v1/users/me/balance） =====
+  var KIMI_BAL_LOADING = false;
+  function kimiBalStatus(msg, isErr) {
+    var el = $('kimiBalStatus');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.style.color = isErr ? '#dc2626' : '';
+  }
+  function loadKimiBalance() {
+    if (KIMI_BAL_LOADING) return;
+    KIMI_BAL_LOADING = true;
+    var heads = { 'Accept': 'application/json' };
+    var spare = recApiToken();
+    if (spare) heads['X-Admin-Token'] = spare;
+    kimiBalStatus('正在读取官方余额…');
+    fetch('/api/admin/ai-account', { headers: heads, credentials: 'same-origin', cache: 'no-store' })
+      .then(function (r) { return r.text().then(function (t) {
+        var d = null;
+        try { d = t ? JSON.parse(t) : null; } catch (e) { d = null; }
+        if (!r.ok) {
+          var m = (d && (d.message || d.error)) ? (d.message || d.error) : ('HTTP ' + r.status);
+          var err = new Error(m); err.status = r.status; throw err;
+        }
+        if (!d) throw new Error('接口返回非 JSON（可能未部署 /api/admin/ai-account）');
+        return d;
+      }); })
+      .then(function (d) {
+        var bal = (d && (d.balance || (d.data && d.data.balance))) || {};
+        function yuan(v) {
+          var n = Number(v);
+          if (!isFinite(n)) return '—';
+          return n.toFixed(2);
+        }
+        var a = $('kimiBalAvail'); if (a) a.textContent = yuan(bal.available_balance != null ? bal.available_balance : bal.available);
+        var v = $('kimiBalVoucher'); if (v) v.textContent = yuan(bal.voucher_balance != null ? bal.voucher_balance : bal.voucher);
+        var c = $('kimiBalCash'); if (c) c.textContent = yuan(bal.cash_balance != null ? bal.cash_balance : bal.cash);
+        var st = $('kimiBalState');
+        if (st) st.textContent = bal.status || (bal.available_balance != null && Number(bal.available_balance) > 0 ? '正常' : '—');
+        var models = (d && (d.models || (d.data && d.data.models))) || [];
+        var probes = (d && (d.probes || d.targets || (d.data && d.data.probes))) || [];
+        var mtxt = '';
+        if (models.length) mtxt += '官方模型 ' + models.length + ' 个可用';
+        if (probes.length) {
+          mtxt += (mtxt ? '　·　' : '') + '目标模型：' + probes.map(function (p) {
+            var ok = !!p.available || !!p.ok || (p.ids && p.ids.length);
+            return (p.key || p.model || '') + (ok ? ' 可用' : ' 不可用');
+          }).join('，');
+        }
+        var me = $('kimiBalModels'); if (me) me.textContent = mtxt;
+        kimiBalStatus('更新时间：' + new Date().toLocaleTimeString('zh-CN', { hour12: false }));
+      })
+      .catch(function (e) {
+        kimiBalStatus('读取失败：' + (e.message || '网络异常') + '（请确认后台项目已配置 KIMI_API_KEY 与 ADMIN_TOKEN）', true);
+        ['kimiBalAvail', 'kimiBalVoucher', 'kimiBalCash', 'kimiBalState'].forEach(function (id) {
+          var el = $(id); if (el) el.textContent = '—';
+        });
+      })
+      .finally(function () { KIMI_BAL_LOADING = false; });
+  }
+  (function bindKimiBal() {
+    var b = $('kimiBalRefresh');
+    if (b) b.addEventListener('click', loadKimiBalance);
+    loadKimiBalance();
+  })();
 
   // ===== 维护控制（v69） =====
   var MAINT_STATE = { loading: false, data: null, error: '' };

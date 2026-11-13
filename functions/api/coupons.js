@@ -70,7 +70,6 @@ async function handleGen(kv, request, body) {
   if (!prefix) prefix = 'GC';
 
   const projectKeys = normProjectKeys(body.projectKeys);
-  const projectKeys = normProjectKeys(body.projectKeys);
   const type = String(body.type || '通用券').slice(0, 40);
   const value = String(body.value || '').slice(0, 40);
   const note = String(body.note || '').slice(0, 200);

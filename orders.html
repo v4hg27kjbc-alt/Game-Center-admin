@@ -64,6 +64,17 @@
   </table>
 </div>
 
+<h1 style="margin-top:24px;font-size:17px">用户反馈 <span class="pill p-pending" id="fbCount">0</span></h1>
+<p class="sub">来自主站「我的 → 我购买的商品 → 联系站长反馈」，按时间倒序</p>
+<div class="card">
+  <table>
+    <thead>
+      <tr><th style="width:150px">时间</th><th style="width:190px">订单号</th><th style="width:160px">联系方式</th><th>反馈内容</th></tr>
+    </thead>
+    <tbody id="fbRows"><tr><td colspan="4" class="empty">加载中…</td></tr></tbody>
+  </table>
+</div>
+
 <script>
 var $ = function (id) { return document.getElementById(id); };
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -117,10 +128,26 @@ $('rows').addEventListener('click', function(e){
     .catch(function(){ b.disabled = false; b.textContent = old; alert('网络异常'); });
 });
 
-$('reload').addEventListener('click', load);
+function loadFeedback(){
+  fetch('/api/order?action=feedbacklist', { credentials:'include', cache:'no-store' })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(!d.ok){ $('fbRows').innerHTML = '<tr><td colspan="4" class="empty">' + esc(d.message||'加载失败') + '</td></tr>'; return; }
+      var list = d.feedbacks || [];
+      $('fbCount').textContent = list.length;
+      if(!list.length){ $('fbRows').innerHTML = '<tr><td colspan="4" class="empty">暂无反馈</td></tr>'; return; }
+      $('fbRows').innerHTML = list.map(function(f){
+        return '<tr><td class="mono">'+fmt(f.createdAt)+'</td><td class="mono">'+esc(f.orderId)+'</td>'
+          +'<td>'+esc(f.contact||'-')+'</td><td style="line-height:1.7">'+esc(f.text)+'</td></tr>';
+      }).join('');
+    }).catch(function(){ $('fbRows').innerHTML = '<tr><td colspan="4" class="empty">网络异常</td></tr>'; });
+}
+
+$('reload').addEventListener('click', function(){ load(); loadFeedback(); });
 $('filter').addEventListener('change', load);
 load();
-setInterval(load, 30000);
+loadFeedback();
+setInterval(function(){ load(); loadFeedback(); }, 30000);
 </script>
 </body>
 </html>

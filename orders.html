@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>付费订单 · 后台</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",Arial,sans-serif;background:#f6f8fc;color:#1f2937;padding:24px}
+  h1{font-size:19px;margin-bottom:6px}
+  .sub{font-size:12.5px;color:#64748b;margin-bottom:16px}
+  .stats{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+  .stat{background:#fff;border:1px solid #e5eaf3;border-radius:12px;padding:12px 18px;min-width:110px}
+  .stat span{display:block;font-size:11.5px;color:#94a3b8}
+  .stat b{font-size:20px;color:#1e293b}
+  .stat.warn b{color:#b45309}
+  .card{background:#fff;border:1px solid #e5eaf3;border-radius:14px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #eef2f7;vertical-align:top}
+  th{background:#f8fafc;font-weight:600;color:#475569;font-size:12px}
+  tr:last-child td{border-bottom:0}
+  .mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}
+  .pill{display:inline-block;border-radius:20px;padding:2px 10px;font-size:11.5px}
+  .p-pending{background:#fff7ed;color:#b45309}
+  .p-confirmed{background:#ecfdf5;color:#047857}
+  .p-rejected{background:#fef2f2;color:#b91c1c}
+  button{border:0;border-radius:8px;padding:6px 12px;font-size:12.5px;cursor:pointer;color:#fff;background:#4f46e5}
+  button.gray{background:#e2e8f0;color:#334155}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .empty{padding:28px;text-align:center;color:#94a3b8;font-size:13px}
+  .bar{display:flex;gap:8px;margin-bottom:12px;align-items:center}
+  .bar select{padding:7px 10px;border:1px solid #d7dfec;border-radius:8px;font-size:13px}
+</style>
+</head>
+<body>
+<h1>付费订单</h1>
+<p class="sub">波音737 报告 · ¥5 爱发电订单 · 核对到账后点「确认开通」，系统自动发券（关联 b737 项目）</p>
+
+<div class="stats">
+  <div class="stat warn"><span>待确认</span><b id="sPending">-</b></div>
+  <div class="stat"><span>已开通</span><b id="sConfirmed">-</b></div>
+  <div class="stat"><span>已驳回</span><b id="sRejected">-</b></div>
+  <div class="stat"><span>总订单</span><b id="sTotal">-</b></div>
+</div>
+
+<div class="bar">
+  <select id="filter">
+    <option value="pending">待确认</option>
+    <option value="">全部</option>
+    <option value="confirmed">已开通</option>
+    <option value="rejected">已驳回</option>
+  </select>
+  <button class="gray" id="reload">刷新</button>
+  <span class="sub" style="margin:0" id="tip">每 30 秒自动刷新</span>
+</div>
+
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>订单号</th><th>联系方式</th><th>爱发电订单号</th><th>金额</th><th>状态</th><th>时间</th><th>券码</th><th>操作</th></tr>
+    </thead>
+    <tbody id="rows"><tr><td colspan="8" class="empty">加载中…</td></tr></tbody>
+  </table>
+</div>
+
+<script>
+var $ = function (id) { return document.getElementById(id); };
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function fmt(ts){ if(!ts) return '-'; var d=new Date(ts); if(isNaN(d)) return ts;
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+
+function load(){
+  var st = $('filter').value;
+  fetch('/api/order?action=list&limit=200' + (st ? '&status=' + st : ''), { credentials: 'include', cache: 'no-store' })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(!d.ok){ $('rows').innerHTML = '<tr><td colspan="8" class="empty">' + esc(d.message || '加载失败（请确认已登录后台）') + '</td></tr>'; return; }
+      var s = d.stats || {};
+      $('sPending').textContent = s.pending || 0;
+      $('sConfirmed').textContent = s.confirmed || 0;
+      $('sRejected').textContent = s.rejected || 0;
+      $('sTotal').textContent = s.total || 0;
+      var list = d.orders || [];
+      if(!list.length){ $('rows').innerHTML = '<tr><td colspan="8" class="empty">暂无订单</td></tr>'; return; }
+      $('rows').innerHTML = list.map(function(o){
+        var cls = o.status === 'confirmed' ? 'p-confirmed' : (o.status === 'rejected' ? 'p-rejected' : 'p-pending');
+        var label = o.status === 'confirmed' ? '已开通' : (o.status === 'rejected' ? '已驳回' : '待确认');
+        var ops = o.status === 'pending'
+          ? '<button data-id="'+esc(o.id)+'" data-act="confirm">确认开通</button> <button class="gray" data-id="'+esc(o.id)+'" data-act="reject">驳回</button>'
+          : (o.status === 'confirmed' ? '<button class="gray" data-id="'+esc(o.id)+'" data-act="confirm" disabled>已完成</button>' : '<button class="gray" data-id="'+esc(o.id)+'" data-act="confirm">重新开通</button>');
+        return '<tr><td class="mono">'+esc(o.id)+'</td><td>'+esc(o.contact)+'</td><td class="mono">'+esc(o.afdianOrder||'-')+'</td><td>¥'+esc(o.price)+'</td>'
+          +'<td><span class="pill '+cls+'">'+label+'</span></td><td class="mono">'+fmt(o.createdAt)+'</td>'
+          +'<td class="mono">'+esc(o.couponCode||'-')+'</td><td>'+ops+'</td></tr>';
+      }).join('');
+    }).catch(function(){ $('rows').innerHTML = '<tr><td colspan="8" class="empty">网络异常</td></tr>'; });
+}
+
+$('rows').addEventListener('click', function(e){
+  var b = e.target.closest('button[data-act]');
+  if(!b || b.disabled) return;
+  var id = b.getAttribute('data-id'), act = b.getAttribute('data-act');
+  var reason = '';
+  if(act === 'reject'){ reason = prompt('驳回原因（用户可见于订单备注）', '未查询到对应爱发电到账记录') || ''; if(reason === '') return; }
+  b.disabled = true; var old = b.textContent; b.textContent = '处理中…';
+  fetch('/api/order', { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ action: act, id: id, reason: reason }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      b.disabled = false; b.textContent = old;
+      if(!d.ok){ alert(d.message || '操作失败'); return; }
+      if(act === 'confirm' && d.couponCode){
+        alert('已开通，券码：' + d.couponCode + '\n请发送给用户：' + d.couponCode);
+      }
+      load();
+    })
+    .catch(function(){ b.disabled = false; b.textContent = old; alert('网络异常'); });
+});
+
+$('reload').addEventListener('click', load);
+$('filter').addEventListener('change', load);
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>

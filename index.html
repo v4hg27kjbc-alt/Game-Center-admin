@@ -1304,6 +1304,9 @@ td.check-col { width: 34px; text-align: center; }
   .nav-more-toggle:hover { color: var(--text); }
   .nav-more-toggle[aria-expanded="false"] .nav-more-chev { transform: rotate(-90deg); }
   .nav-more-group.collapsed { display: none; }
+  /* 展开为竖排列表，不再一排平铺 */
+  .nav-more-group { display: flex; flex-direction: column; gap: 2px; }
+  .nav-more-group .nav-item { display: flex; align-items: center; gap: 8px; width: 100%; }
   .sidebar .nav { overflow-y: auto; max-height: calc(100vh - 96px); overflow-x: hidden; }
   .sidebar .nav::-webkit-scrollbar { width: 6px; }
   .sidebar .nav::-webkit-scrollbar-thumb { background: rgba(120,140,180,.35); border-radius: 3px; }
@@ -1335,7 +1338,7 @@ td.check-col { width: 34px; text-align: center; }
 <!-- 主界面 -->
 <div id="mainPage" class="main-page hidden">
   <aside class="sidebar">
-    <div class="sidebar-brand">✈ 后台管理<span class="brand-ver" title="已同步主站 v3.2 能力">v3.2</span></div>
+    <div class="sidebar-brand">✈ 后台管理<span class="brand-ver" title="v3.3 收费管理 · 实时用户 · 退款 · Kimi 直连">v3.3</span></div>
     <nav class="nav">
       <a href="#" class="nav-item active" data-page="dashboard">数据看板</a>
       <a href="#" class="nav-item nav-primary-item" data-page="sms" data-role="owner,admin">📨 收发</a>
@@ -1344,16 +1347,16 @@ td.check-col { width: 34px; text-align: center; }
       <a href="#" class="nav-item nav-primary-item" data-page="tempaccounts" data-role="owner,admin">临时账户</a>
       <a href="#" class="nav-item nav-primary-item" data-page="trialfb" data-role="owner,admin">内测反馈</a>
       <a href="#" class="nav-item nav-primary-item" data-page="coupons" data-role="owner,admin">券码管理</a>
+      <a href="#" class="nav-item nav-primary-item" data-page="billing" data-role="owner,admin">收费管理</a>
       <a href="#" class="nav-item nav-primary-item" data-page="maint" data-role="owner,admin">维护控制</a>
-      <button type="button" class="nav-divider nav-more-toggle" id="navMoreToggle" aria-expanded="false" aria-controls="navMoreGroup" title="展开 / 收起更多功能">
+      <button type="button" class="nav-divider nav-more-toggle" id="navMoreToggle" aria-expanded="true" aria-controls="navMoreGroup" title="展开 / 收起更多功能">
         <span>更多</span>
         <svg class="nav-more-chev" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
       </button>
-      <div class="nav-more-group collapsed" id="navMoreGroup">
+      <div class="nav-more-group" id="navMoreGroup">
       <a href="#" class="nav-item" data-page="feedbacks" data-role="owner,admin">反馈管理</a>
       <a href="#" class="nav-item with-ic" data-page="recommendations" data-role="owner,admin"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.7 5.7 6.3 0.9-4.6 4.4 1.1 6.2L12 17.3 6.5 20.2l1.1-6.2L3 9.6l6.3-0.9L12 3z"/></svg>推荐机型</a>
       <a href="#" class="nav-item" data-page="notices" data-role="owner,admin">公告管理</a>
-      <a href="#" class="nav-item with-ic" data-page="usercontrol" data-role="owner,admin"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l2.4 2.4L17 4l.6 2.6L20 9l-1 3 1 3-2.4 2.4L17 20l-2.6-.6L12 22l-2.4-2.4L7 20l-.6-2.6L4 15l1-3-1-3 2.4-2.4L7 4l2.6.6L12 2z"/><path d="M9 12l2 2 4-4"/></svg>航站服务台<span id="ucAppealDot" class="nav-dot hidden"></span></a>
       <a href="#" class="nav-item" data-page="trash" data-role="owner,admin">回收站</a>
       <a href="#" class="nav-item" data-page="sites" data-role="owner">站点管理</a>
       <a href="#" class="nav-item" data-page="ops" data-role="owner,admin">运营选题</a>
@@ -1880,6 +1883,49 @@ td.check-col { width: 34px; text-align: center; }
       </section>
 
       <!-- 券码管理 -->
+      <section id="page-billing" class="page hidden">
+        <div class="toolbar">
+          <div>
+            <div class="toolbar-title">收费管理</div>
+            <p class="sub-note">实时用户在线状态、订单营收与单用户退款。退款会同时作废该订单关联券码，并写入退款时间与原因，可在订单流水追溯。数据源 /api/realtime（与主站共用 SMS_KV），订单操作走 /api/order。</p>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <button id="billRefresh" class="btn btn-ghost" type="button">刷新数据</button>
+            <label style="font-size:12px;display:flex;gap:6px;align-items:center;white-space:nowrap"><input id="billAuto" type="checkbox" checked> 自动刷新 15s</label>
+          </div>
+        </div>
+        <div id="billStatus" class="list-status"></div>
+
+        <div class="uc-stat-row">
+          <div class="uc-stat-card"><div class="uc-stat-num" id="billOnline">0</div><div class="uc-stat-label">当前在线</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="billActive">0</div><div class="uc-stat-label">24h 活跃</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="billUsers">0</div><div class="uc-stat-label">注册用户</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="billPaid">0</div><div class="uc-stat-label">付费用户</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="billRevenue">¥0</div><div class="uc-stat-label">累计收入</div></div>
+          <div class="uc-stat-card"><div class="uc-stat-num" id="billRefund">¥0</div><div class="uc-stat-label">累计退款</div></div>
+        </div>
+
+        <div class="table-card" style="margin-bottom:16px">
+          <div class="toolbar-title" style="font-size:14px">实时用户 <span class="list-status" style="font-weight:400;margin-left:8px">按最近活动排序，10 分钟内有过请求视为在线</span></div>
+          <div style="overflow:auto;margin-top:10px">
+            <table class="table">
+              <thead><tr><th>状态</th><th>用户名</th><th>手机号</th><th>最近活动</th><th>登录</th><th>券码</th><th>订单</th><th>操作</th></tr></thead>
+              <tbody id="billUserBody"><tr><td colspan="8" style="text-align:center;color:#94a3b8">加载中…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div class="toolbar-title" style="font-size:14px">订单流水与退款</div>
+          <div style="overflow:auto;margin-top:10px">
+            <table class="table">
+              <thead><tr><th>订单号</th><th>联系人</th><th>商品</th><th>金额</th><th>状态</th><th>券码</th><th>创建时间</th><th>操作</th></tr></thead>
+              <tbody id="billOrderBody"><tr><td colspan="8" style="text-align:center;color:#94a3b8">加载中…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <section id="page-coupons" class="page hidden">
         <div class="toolbar">
           <div>
@@ -2625,7 +2671,7 @@ td.check-col { width: 34px; text-align: center; }
   function switchPage(name) {
     // 敏感面板前置身份验证（登录密码）
     if (typeof requireGate === 'function' && !requireGate(name)) return;
-    var pages = ['dashboard', 'sms', 'token', 'users', 'tempaccounts', 'trialfb', 'coupons', 'maint', 'feedbacks', 'recommendations', 'ops', 'notices', 'usercontrol', 'trash', 'vault', 'sites', 'settings'];
+    var pages = ['dashboard', 'sms', 'token', 'users', 'tempaccounts', 'trialfb', 'coupons', 'billing', 'maint', 'feedbacks', 'recommendations', 'ops', 'notices', 'trash', 'vault', 'sites', 'settings'];
     for (var i = 0; i < pages.length; i++) {
       var pg = $('page-' + pages[i]);
       if (pg) pg.classList.toggle('hidden', pages[i] !== name);
@@ -2634,7 +2680,7 @@ td.check-col { width: 34px; text-align: center; }
     for (var j = 0; j < navs.length; j++) {
       navs[j].classList.toggle('active', navs[j].getAttribute('data-page') === name);
     }
-    var titles = { dashboard: '数据看板', sms: '收发模块', token: 'Token 用量', users: '用户管理', tempaccounts: '临时账户', trialfb: '内测反馈', coupons: '券码管理', maint: '维护控制', feedbacks: '反馈管理', recommendations: '推荐机型', ops: '运营选题', notices: '公告管理', usercontrol: '航站服务台', trash: '回收站', vault: '密钥保险柜', sites: '站点管理', settings: '系统设置' };
+    var titles = { dashboard: '数据看板', sms: '收发模块', token: 'Token 用量', users: '用户管理', tempaccounts: '临时账户', trialfb: '内测反馈', coupons: '券码管理', billing: '收费管理', maint: '维护控制', feedbacks: '反馈管理', recommendations: '推荐机型', ops: '运营选题', notices: '公告管理', trash: '回收站', vault: '密钥保险柜', sites: '站点管理', settings: '系统设置' };
     $('pageTitle').textContent = titles[name] || '';
     if (name === 'dashboard') { loadStats(); renderTrend(); renderRecent(); renderNotes(); refreshLivePanels(); }
     if (name === 'sms') renderSmsPage();
@@ -2643,12 +2689,13 @@ td.check-col { width: 34px; text-align: center; }
     if (name === 'tempaccounts') loadTempAccounts();
     if (name === 'trialfb') loadTrialFeedback();
     if (name === 'coupons') loadCoupons();
+    if (name === 'billing') loadBilling();
+    if (name === 'usercontrol') { switchPage('dashboard'); return; } // 服务台已下架，旧链接兜底回看板
     if (name === 'maint') renderMaintPage();
     if (name === 'feedbacks') loadFeedbacks();
     if (name === 'recommendations') loadRecommendations(false);
     if (name === 'ops') loadOpsTopics();
     if (name === 'notices') loadAnnouncements(false);
-    if (name === 'usercontrol') loadUserControl();
     if (name === 'trash') renderTrash();
     if (name === 'sites') renderSites();
     if (name === 'vault') vaultLoad();
@@ -6293,13 +6340,166 @@ td.check-col { width: 34px; text-align: center; }
     alert(ok ? '已通过并生成令牌' : '已驳回');
   }
 
+
+  // ===== 收费管理（实时用户 / 订单 / 单用户退款）=====
+  var billTimer = null;
+  var billUsers = [];
+  var billOrders = [];
+
+  function billStatus(msg) { var el = $('billStatus'); if (el) el.textContent = msg || ''; }
+
+  function billAgo(sec) {
+    if (sec === null || sec === undefined || sec < 0) return '—';
+    if (sec < 60) return sec + ' 秒前';
+    if (sec < 3600) return Math.round(sec / 60) + ' 分钟前';
+    if (sec < 86400) return Math.round(sec / 3600) + ' 小时前';
+    return Math.round(sec / 86400) + ' 天前';
+  }
+
+  function billStatusText(st) {
+    if (st === 'confirmed') return '已确认';
+    if (st === 'rejected') return '已驳回';
+    if (st === 'refunded') return '已退款';
+    return '待确认';
+  }
+
+  function renderBillUsers(list) {
+    var tb = $('billUserBody');
+    if (!tb) return;
+    if (!list.length) { tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#94a3b8">暂无用户数据</td></tr>'; return; }
+    var html = '';
+    list.forEach(function (u) {
+      var dot = u.online
+        ? '<span style="display:inline-flex;align-items:center;gap:5px;color:#16a34a;font-size:12px"><i style="width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.18);display:inline-block"></i>在线</span>'
+        : '<span style="color:#94a3b8;font-size:12px">离线</span>';
+      html += '<tr>' +
+        '<td>' + dot + '</td>' +
+        '<td>' + (u.username || '（未命名）') + '</td>' +
+        '<td>' + (u.phone ? u.phone.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2') : '—') + '</td>' +
+        '<td>' + billAgo(u.lastActiveAgo) + '</td>' +
+        '<td>' + u.loginCount + '</td>' +
+        '<td>' + u.coupons + '</td>' +
+        '<td>' + u.orders + '</td>' +
+        '<td><button class="btn btn-ghost" type="button" data-bill-user="' + u.uid + '">查看</button></td>' +
+        '</tr>';
+    });
+    tb.innerHTML = html;
+    var btns = tb.querySelectorAll('[data-bill-user]');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].addEventListener('click', function (e) {
+        billUserDetail(e.currentTarget.getAttribute('data-bill-user'));
+      });
+    }
+  }
+
+  function renderBillOrders(list) {
+    var tb = $('billOrderBody');
+    if (!tb) return;
+    if (!list.length) { tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#94a3b8">暂无订单</td></tr>'; return; }
+    var html = '';
+    list.forEach(function (o) {
+      var st = String(o.status || 'pending');
+      var canRefund = st === 'confirmed' || st === 'pending';
+      html += '<tr>' +
+        '<td style="font-family:ui-monospace,Menlo,monospace;font-size:12px">' + (o.id || '') + '</td>' +
+        '<td>' + (o.contact || o.uid || '—') + '</td>' +
+        '<td>' + (o.projectTitle || o.project || '737 报告') + '</td>' +
+        '<td>¥' + (o.price || 5) + '</td>' +
+        '<td>' + billStatusText(st) + '</td>' +
+        '<td style="font-family:ui-monospace,Menlo,monospace;font-size:12px">' + (o.couponCode || '—') + '</td>' +
+        '<td style="font-size:12px;color:#64748b">' + String(o.createdAt || '').replace('T', ' ').slice(0, 19) + '</td>' +
+        '<td>' + (canRefund ? '<button class="btn btn-ghost" type="button" data-bill-refund="' + (o.id || '') + '">退款</button>' : '—') + '</td>' +
+        '</tr>';
+    });
+    tb.innerHTML = html;
+    var rbs = tb.querySelectorAll('[data-bill-refund]');
+    for (var i = 0; i < rbs.length; i++) {
+      rbs[i].addEventListener('click', function (e) {
+        billRefund(e.currentTarget.getAttribute('data-bill-refund'));
+      });
+    }
+  }
+
+  function billUserDetail(uid) {
+    if (!uid) return;
+    recRequest('/api/realtime?action=user&uid=' + encodeURIComponent(uid)).then(function (d) {
+      var u = (d && d.user) || {};
+      var lines = [];
+      lines.push('用户：' + (u.username || '（未命名）'));
+      lines.push('UID：' + u.uid);
+      lines.push('手机号：' + (u.phone || '未绑定'));
+      lines.push('注册时间：' + String(u.createdAt || '—').replace('T', ' ').slice(0, 19));
+      lines.push('最近活动：' + billAgo(u.lastActiveAgo) + '（' + (u.lastActiveAt || '—') + '）');
+      lines.push('登录次数：' + u.loginCount);
+      lines.push('持有券码：' + u.coupons + ' 张');
+      lines.push('订单数：' + u.orders);
+      lines.push('付费用户：' + (u.paid ? '是' : '否'));
+      lines.push('状态：' + ((d && d.raw && d.raw.status) || 'active'));
+      alert(lines.join('\n'));
+    }).catch(function (e) { billStatus('读取用户详情失败：' + e.message); });
+  }
+
+  function billRefund(id) {
+    if (!id) return;
+    var reason = prompt('退款原因（会写入订单流水）：', '用户申请退款');
+    if (reason === null) return;
+    billStatus('正在退款 ' + id + ' …');
+    recRequest('/api/order', { method: 'POST', body: { action: 'refund', id: id, reason: String(reason || '后台退款') } })
+      .then(function (d) {
+        var tip = '订单 ' + id + ' 已退款';
+        if (d && d.couponRevoked) tip += '，关联券码 ' + (d.couponCode || '') + ' 已作废';
+        billStatus(tip);
+        loadBilling();
+      })
+      .catch(function (e) { billStatus('退款失败：' + e.message); });
+  }
+
+  function loadBilling(silent) {
+    if (!silent) billStatus('正在加载实时数据…');
+    return recRequest('/api/realtime?action=overview').then(function (d) {
+      billUsers = (d && d.users) || [];
+      var so = (d && d.orders) || {};
+      if ($('billOnline')) $('billOnline').textContent = d.online || 0;
+      if ($('billActive')) $('billActive').textContent = d.active24h || 0;
+      if ($('billUsers')) $('billUsers').textContent = d.totalUsers || 0;
+      if ($('billPaid')) $('billPaid').textContent = d.paidUsers || 0;
+      if ($('billRevenue')) $('billRevenue').textContent = '¥' + (so.revenue || 0);
+      if ($('billRefund')) $('billRefund').textContent = '¥' + (so.refundAmount || 0);
+      renderBillUsers(billUsers);
+      billStatus('最近更新 ' + new Date().toLocaleTimeString('zh-CN') + ' · 待确认 ' + (so.pending || 0) + ' 单 · 今日订单 ' + (so.todayOrders || 0));
+      return recRequest('/api/order?action=list&limit=200').then(function (od) {
+        billOrders = (od && od.orders) || [];
+        renderBillOrders(billOrders);
+      });
+    }).catch(function (e) {
+      billStatus('加载失败：' + e.message);
+    });
+  }
+
+  (function initBilling() {
+    var btn = $('billRefresh');
+    if (btn) btn.addEventListener('click', function () { loadBilling(); });
+    var auto = $('billAuto');
+    if (auto) auto.addEventListener('change', function () {
+      if (billTimer) { clearInterval(billTimer); billTimer = null; }
+      if (auto.checked) billTimer = setInterval(function () {
+        var pg = $('page-billing');
+        if (pg && !pg.classList.contains('hidden')) loadBilling(true);
+      }, 15000);
+    });
+    if (auto && auto.checked) billTimer = setInterval(function () {
+      var pg = $('page-billing');
+      if (pg && !pg.classList.contains('hidden')) loadBilling(true);
+    }, 15000);
+  })();
+
   // ===== 侧栏「更多」分组展开 / 收起 =====
   (function initNavMore() {
     var btn = $('navMoreToggle'), group = $('navMoreGroup');
     if (!btn || !group) return;
     var saved = null;
     try { saved = localStorage.getItem('mv_nav_more'); } catch (e) {}
-    var open = saved === '1';
+    var open = saved !== '0';
     function apply(v) {
       btn.setAttribute('aria-expanded', v ? 'true' : 'false');
       if (v) group.classList.remove('collapsed'); else group.classList.add('collapsed');

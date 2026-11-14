@@ -356,6 +356,52 @@ export async function onRequestPost({ request, env }) {
     return ok({ id: id, status: 'confirmed', couponCode: display });
   }
 
+  // ── 单订单退款（后台收费管理）：作废关联券码 + 标记订单已退款 ──
+  if (action === 'refund') {
+    if (!isAdmin(request, env)) return bad('unauthorized', '需要管理员令牌', null, 401);
+    const id = String(body.id || '').trim();
+    if (!id) return bad('bad_id', '缺少订单号');
+    const o = await readJson(kv, 'order:item:' + id, null);
+    if (!o) return bad('not_found', '订单不存在');
+    if (o.status === 'refunded') return ok({ id: id, status: 'refunded', reused: true, couponCode: o.couponCode || '' });
+    const at = new Date().toISOString();
+    const reason = String(body.reason || '后台退款').slice(0, 200);
+    let revoked = '';
+    if (o.couponCode) {
+      const rec = await readJson(kv, 'coupon:index:v1', []);
+      const list = Array.isArray(rec) ? rec : [];
+      for (let i = 0; i < list.length; i++) {
+        const c = list[i];
+        if (!c) continue;
+        if (String(c.couponCode || '') !== String(o.couponCode)) continue;
+        list[i] = Object.assign({}, c, { status: 'revoked', revokedAt: at, revokeReason: '订单退款 ' + id });
+        revoked = String(c.couponCode);
+        const norm = String(c.code || '');
+        if (norm) {
+          const one = await readJson(kv, 'coupon:code:' + norm, null);
+          if (one) {
+            await kv.put('coupon:code:' + norm, JSON.stringify(Object.assign({}, one, {
+              status: 'revoked', revokedAt: at, revokeReason: '订单退款 ' + id
+            })));
+          }
+        }
+        break;
+      }
+      if (revoked) await kv.put('coupon:index:v1', JSON.stringify(list.slice(0, 5000)));
+    }
+    o.status = 'refunded';
+    o.statusAt = at;
+    o.refundedAt = at;
+    o.refundReason = reason;
+    o.refundTo = String(body.to || '原路退回').slice(0, 60);
+    await kv.put('order:item:' + id, JSON.stringify(o));
+    const idx = await readJson(kv, INDEX_KEY, []);
+    const il = Array.isArray(idx) ? idx : [];
+    for (let i = 0; i < il.length; i++) if (il[i].id === id) il[i] = brief(o);
+    await kv.put(INDEX_KEY, JSON.stringify(il.slice(0, MAX_INDEX)));
+    return ok({ id: id, status: 'refunded', couponCode: o.couponCode || '', couponRevoked: !!revoked, refundedAt: at });
+  }
+
   if (action === 'reject') {
     if (!isAdmin(request, env)) return bad('unauthorized', '需要管理员令牌', null, 401);
     const id = String(body.id || '').trim();
